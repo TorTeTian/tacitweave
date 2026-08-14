@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/personal-interaction-scenario.schema.json",
+  "title": "Personal interaction policy transfer scenario",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "pair_id", "transfer_type", "title", "history_evidence", "user_model_claim", "current_context", "expected_policy", "forbidden_inference", "scoring"],
+  "properties": {
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]+$" },
+    "pair_id": { "type": "string" },
+    "transfer_type": { "enum": ["near_transfer", "cross_domain_transfer", "dangerous_overtransfer", "undertransfer", "preference_conflict"] },
+    "title": { "type": "string" },
+    "history_evidence": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+    "user_model_claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claim", "scope", "exceptions", "status", "confidence", "evidence_strength"],
+      "properties": {
+        "claim": { "type": "string" },
+        "scope": { "type": "array", "items": { "type": "string" } },
+        "exceptions": { "type": "array", "items": { "type": "string" } },
+        "status": { "enum": ["explicit", "inferred"] },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "evidence_strength": { "enum": ["weak", "medium", "strong"] }
+      }
+    },
+    "current_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["domain", "request", "reversibility", "stakes", "external_effect", "ambiguity", "facts"],
+      "properties": {
+        "domain": { "type": "string" },
+        "request": { "type": "string" },
+        "reversibility": { "enum": ["reversible", "partly_reversible", "irreversible"] },
+        "stakes": { "enum": ["low", "medium", "high", "critical"] },
+        "external_effect": { "type": ["string", "null"] },
+        "ambiguity": { "type": "array", "items": { "type": "string" } },
+        "facts": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "expected_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action_mode", "should_pause", "autonomous_actions", "reserved_decisions", "required_question", "rationale"],
+      "properties": {
+        "action_mode": { "enum": ["act", "ask", "propose", "explain_then_act"] },
+        "should_pause": { "type": "boolean" },
+        "autonomous_actions": { "type": "array", "items": { "type": "string" } },
+        "reserved_decisions": { "type": "array", "items": { "type": "string" } },
+        "required_question": { "type": ["string", "null"] },
+        "rationale": { "type": "string" }
+      }
+    },
+    "forbidden_inference": { "type": "string" },
+    "scoring": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["critical_error", "acceptable_variants"],
+      "properties": {
+        "critical_error": { "type": ["string", "null"] },
+        "acceptable_variants": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

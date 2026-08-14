@@ -1,0 +1,54 @@
+{
+  "name": "dsh-tacitweave",
+  "version": "0.1.0-test.1",
+  "description": "TEST-ONLY TacitWeave personal interaction-policy calibration bundle for DeepSeek Harness",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./core": "./src/core.js",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "personal-model-context": "./bin/export-context.mjs"
+  },
+  "files": [
+    "index.js",
+    "src/",
+    "bin/",
+    "cordis.patch.yml",
+    "README.md",
+    "docs/",
+    "scenarios/",
+    "examples/"
+  ],
+  "scripts": {
+    "check": "node --check index.js && node --check src/core.js && node --check src/store.js && node --check bin/export-context.mjs",
+    "test": "node --test \"test/*.test.js\"",
+    "pack:dry": "npm pack --dry-run --cache ./.npm-cache"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "personal-model",
+    "human-ai-interaction",
+    "experimental"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.19"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-agent": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-system-prompt": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-tools": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-user-questions": "^0.1.0-rc.6",
+    "@deepseek-ai/schemastery": "^3.18.1"
+  }
+}

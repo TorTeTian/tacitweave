@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "user_label": "example-user",
+  "updated_at": null,
+  "preferences": [
+    {
+      "id": "example-low-risk-autonomy",
+      "claim": "用户授权 AI 自主处理低风险、可逆的工程细节。",
+      "dimension": "autonomy",
+      "scope": ["software_engineering", "low_risk", "reversible"],
+      "exceptions": ["destructive", "irreversible", "external_effects"],
+      "confidence": 1.0,
+      "status": "explicit",
+      "evidence": ["example evidence: user explicitly stated this preference"]
+    }
+  ],
+  "safety_invariants": [
+    "破坏性、不可逆、金钱、隐私、公开发布和对外沟通行为必须显式确认。",
+    "宽泛的自主偏好不能覆盖更具体的风险边界。"
+  ]
+}

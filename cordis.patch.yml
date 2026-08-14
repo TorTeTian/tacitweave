@@ -1,0 +1,35 @@
+- insert:
+    - id: tacitweave
+      name: dsh-tacitweave
+      inject:
+        - systemPrompt
+        - tools
+        - userQuestions
+      config:
+        memoryDir: .personal-model
+        calibrationMode: adaptive
+        maxMemoryChars: 12000
+        language: zh-CN
+        gatedTools:
+          - bash
+          - pwsh
+          - write
+          - edit
+          - str_replace_editor
+          - terminal_open
+          - terminal_send
+          - terminal_signal
+          - terminal_close
+          - cordis_define
+          - cordis_run
+          - cordis_stop
+          - cordis_undefine
+          - schedule_create
+          - schedule_delete
+          - create_goal
+          - update_goal
+          - todo_write
+          - subagent
+          - subagent_fork
+          - workflow
+          - ralph

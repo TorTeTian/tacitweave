@@ -1,0 +1,9 @@
+node_modules/
+.npm-cache/
+.pnpm-store/
+*.tgz
+.env
+.env.*
+work/
+.personal-model/
+coverage/
