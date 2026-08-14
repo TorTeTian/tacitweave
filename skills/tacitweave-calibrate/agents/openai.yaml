@@ -1,0 +1,4 @@
+interface:
+  display_name: "TacitWeave Calibrate"
+  short_description: "Calibrate how ChatGPT should work with you"
+  default_prompt: "Use $tacitweave-calibrate to confirm our working boundaries before acting."

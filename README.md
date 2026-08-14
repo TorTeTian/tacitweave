@@ -111,6 +111,8 @@ The main settings are:
 
 Version 0.1 does not enforce the calibration gate in the ChatGPT desktop app. DSH exposes hooks for system prompts, user questions, and pre-execution tool policy; the ChatGPT desktop app does not expose an equivalent local plugin surface. You can provide the exported Markdown to ChatGPT manually, but this only transfers context. It cannot force the model to pause before acting.
 
+For ChatGPT Work, the repository includes the portable [`tacitweave-calibrate` Skill](skills/tacitweave-calibrate/SKILL.md). It compiles the same task-specific policy, pauses when a boundary needs confirmation, and keeps current corrections separate from long-term memory. The Skill guides model behavior; it cannot intercept Work tools or replace ChatGPT's own permission controls. Keep filled-in Personal Model files outside the Skill package and attach them only when a conversation needs them.
+
 ## Evaluation material
 
 - [Scenario-writing specification](docs/SCENARIO_SPEC.md)
