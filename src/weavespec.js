@@ -10,11 +10,11 @@ export const DEFAULT_SAFETY_INVARIANTS = [
 ]
 
 const PREFERENCE_MARKERS = [
-  /我(?:希望|偏好|习惯|通常|一般|不喜欢|需要|要求)/i,
+  /我(?:希望|偏好|习惯|通常|一般|不喜欢|要求)/i,
   /(?:不用|无需|不要|不必|必须|应该|请)(?:先|再)?(?:问|询问|确认|解释|替我|直接)/i,
   /(?:由我|让我)(?:决定|选择|确认)/i,
   /你可以(?:直接|自行|自己)|交给你(?:决定|处理)/i,
-  /\bI\s+(?:prefer|want|usually|generally|need|expect|dislike)\b/i,
+  /\bI\s+(?:prefer|want|usually|generally|expect|dislike)\b/i,
   /\b(?:do not|don't|never|always)\s+(?:ask|decide|send|publish|share|delete|explain)\b/i,
   /\bask me before\b|\bleave .* to me\b|\byou can (?:decide|handle|choose|go ahead)\b/i,
 ]
@@ -55,11 +55,13 @@ export function detectFormat(inputPath, text) {
 
 export function parseImportedContent(text, format, inputPath = 'input') {
   const selected = format === 'auto' ? detectFormat(inputPath, text) : format
-  if (selected === 'chatgpt') return { format: selected, messages: parseChatGpt(text) }
-  if (selected === 'jsonl') return { format: selected, messages: parseJsonl(text) }
-  if (selected === 'json') return { format: selected, messages: parseJsonMessages(text) }
-  if (selected === 'markdown') return { format: selected, messages: parseMarkdown(text) }
-  throw new Error(`Unsupported format: ${selected}`)
+  let messages
+  if (selected === 'chatgpt') messages = parseChatGpt(text)
+  else if (selected === 'jsonl') messages = parseJsonl(text)
+  else if (selected === 'json') messages = parseJsonMessages(text)
+  else if (selected === 'markdown') messages = parseMarkdown(text)
+  else throw new Error(`Unsupported format: ${selected}`)
+  return { format: selected, messages: expandReferencedConversationMessages(messages) }
 }
 
 export function buildSourceEnvelope({ messages, format, inputPath, importedAt = new Date().toISOString() }) {
@@ -442,6 +444,87 @@ function normalizeMessage(message, index = 0) {
     timestamp: normalizeTimestamp(message?.create_time ?? message?.timestamp ?? null),
     content,
   }
+}
+
+function expandReferencedConversationMessages(messages, depth = 0) {
+  if (depth > 3) return messages
+  const expanded = []
+  for (const message of messages) {
+    const reference = parseEmbeddedConversationReference(message.content)
+    if (!reference) {
+      expanded.push(message)
+      continue
+    }
+    const prior = reference.value?.priorConversation?.conversation
+    if (Array.isArray(prior)) {
+      const nested = prior.map((entry, index) => normalizeReferencedMessage(entry, message, index)).filter(Boolean)
+      expanded.push(...expandReferencedConversationMessages(nested, depth + 1))
+    }
+    const currentRequest = extractCurrentRequest(message.content, reference.end)
+    if (currentRequest) expanded.push({ ...message, content: currentRequest })
+  }
+  return expanded
+}
+
+function parseEmbeddedConversationReference(text) {
+  const value = String(text ?? '')
+  const matcher = /\{\s*"conversationId"\s*:/g
+  for (const match of value.matchAll(matcher)) {
+    const json = extractBalancedJson(value, match.index)
+    if (!json) continue
+    try {
+      const parsed = JSON.parse(json.text)
+      if (typeof parsed?.conversationId !== 'string' || !Object.hasOwn(parsed, 'priorConversation')) continue
+      return { value: parsed, start: match.index, end: json.end }
+    } catch {}
+  }
+  return null
+}
+
+function extractBalancedJson(text, start) {
+  let depth = 0
+  let inString = false
+  let escaped = false
+  for (let index = start; index < text.length; index += 1) {
+    const character = text[index]
+    if (inString) {
+      if (escaped) escaped = false
+      else if (character === '\\') escaped = true
+      else if (character === '"') inString = false
+      continue
+    }
+    if (character === '"') inString = true
+    else if (character === '{') depth += 1
+    else if (character === '}') {
+      depth -= 1
+      if (depth === 0) return { text: text.slice(start, index + 1), end: index + 1 }
+    }
+  }
+  return null
+}
+
+function normalizeReferencedMessage(entry, parent, index) {
+  const content = Array.isArray(entry?.content)
+    ? entry.content.map(part => typeof part === 'string' ? part : part?.text ?? '').filter(Boolean).join('\n')
+    : typeof entry?.content === 'string' ? entry.content : entry?.text ?? ''
+  if (!content || !['user', 'assistant'].includes(entry?.role)) return null
+  return {
+    id: `${parent.id}:referenced-${index + 1}`,
+    role: entry.role,
+    timestamp: normalizeTimestamp(entry.timestamp ?? parent.timestamp),
+    content,
+  }
+}
+
+function extractCurrentRequest(text, referenceEnd) {
+  const value = String(text ?? '')
+  const marker = /#{1,6}\s*My request\s*:\s*/ig
+  let match
+  let last = null
+  while ((match = marker.exec(value)) !== null) last = match
+  if (last) return value.slice(last.index + last[0].length).trim()
+  const trailing = value.slice(referenceEnd).replace(/^\s*[-#]+\s*/u, '').trim()
+  return trailing || ''
 }
 
 function splitStatements(text) {

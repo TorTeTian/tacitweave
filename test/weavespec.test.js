@@ -62,6 +62,28 @@ test('Markdown and JSONL imports preserve explicit user statements', () => {
   assert.equal(jsonlBatch.candidates[0].kind, 'decision_boundary')
 })
 
+test('embedded ChatGPT conversation references are structurally unwrapped before extraction', () => {
+  const reference = {
+    conversationId: 'conversation-example',
+    priorConversation: {
+      conversation: [
+        { role: 'user', content: [{ content_type: 'text', text: '我需要你生成一份报告。' }] },
+        { role: 'assistant', content: [{ content_type: 'text', text: '我希望你永远采用助手自己的建议。' }] },
+        { role: 'user', content: [{ content_type: 'text', text: '低风险代码修改不用问我。' }] },
+      ],
+      diff: null,
+    },
+  }
+  const wrapper = `## Referenced ChatGPT conversation:\n${JSON.stringify(reference)}\n## My request:\nContinuing from the referenced conversation.`
+  const input = JSON.stringify({ role: 'user', content: wrapper })
+  const parsed = parseImportedContent(input, 'jsonl', 'messages.jsonl')
+  const batch = extractCandidates(buildSourceEnvelope({ messages: parsed.messages, format: parsed.format, inputPath: 'messages.jsonl' }))
+  assert.equal(parsed.messages.filter(item => item.role === 'user').length, 3)
+  assert.equal(batch.candidates.length, 1)
+  assert.equal(batch.candidates[0].claim, '低风险代码修改不用问我。')
+  assert.doesNotMatch(batch.candidates[0].claim, /conversationId|\{/)
+})
+
 test('duplicate statements merge evidence before review', () => {
   const parsed = parseImportedContent('I prefer concise explanations.\nI prefer concise explanations.', 'markdown', 'notes.md')
   const batch = extractCandidates(buildSourceEnvelope({ messages: parsed.messages, format: parsed.format, inputPath: 'notes.md' }))

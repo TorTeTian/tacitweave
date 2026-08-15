@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join } from 'node:path'
+import { resolveMemoryDirectory } from '../src/paths.js'
 import {
   acceptCandidate,
   createEmptyModel,
@@ -15,10 +16,12 @@ import {
 
 const [command = 'list', ...rest] = process.argv.slice(2)
 const args = parseArgs(rest)
-const memoryDir = resolve(args['memory-dir'] ?? '.personal-model')
+const memoryResolution = resolveMemoryDirectory(args['memory-dir'] ?? '.personal-model')
+const memoryDir = memoryResolution.path
 const modelPath = join(memoryDir, 'personal_model.json')
 
 if (command === 'list') listCandidates(args.status ?? 'candidate')
+else if (command === 'where') showMemoryDirectory()
 else if (command === 'show') showCandidate(requiredId())
 else if (command === 'accept') accept(requiredId())
 else if (command === 'reject') reject(requiredId())
@@ -31,7 +34,17 @@ else if (command === 'source-impact') showSourceImpact(requiredSource())
 else if (command === 'delete-source') deleteSource(requiredSource())
 else if (command === 'migrate') migrate()
 else if (command === 'validate') validate()
-else fail('Commands: list, digest, show, accept, reject, defer, revoke, restore, provenance, source-impact, delete-source, migrate, validate')
+else fail('Commands: where, list, digest, show, accept, reject, defer, revoke, restore, provenance, source-impact, delete-source, migrate, validate')
+
+function showMemoryDirectory() {
+  console.log(JSON.stringify({
+    memory_dir: memoryDir,
+    configured: memoryResolution.configured,
+    source: memoryResolution.source,
+    working_directory: memoryResolution.cwd,
+    relative: memoryResolution.relative,
+  }, null, 2))
+}
 
 function listCandidates(status) {
   const records = loadBatches()

@@ -5,13 +5,14 @@
         - systemPrompt
         - tools
         - userQuestions
+        - webServer
       config:
-        memoryDir: .personal-model
+        memoryDir: !!js process.env.TACITWEAVE_MEMORY_DIR || '.personal-model'
         projectId: current-project
         calibrationMode: adaptive
         memoryReviewMode: selective
         maxMemoryChars: 12000
-        language: zh-CN
+        language: auto
         gatedTools:
           - bash
           - pwsh

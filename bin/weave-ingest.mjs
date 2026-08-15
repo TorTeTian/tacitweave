@@ -2,12 +2,14 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { buildSourceEnvelope, extractCandidates, parseImportedContent } from '../src/weavespec.js'
+import { resolveMemoryDirectory } from '../src/paths.js'
 
 const args = parseArgs(process.argv.slice(2))
 if (!args.input) fail('Usage: weave-ingest --input <path> [--format auto|chatgpt|jsonl|json|markdown] [--memory-dir .personal-model]')
 
 const inputPath = resolve(args.input)
-const memoryDir = resolve(args['memory-dir'] ?? '.personal-model')
+const memoryResolution = resolveMemoryDirectory(args['memory-dir'] ?? '.personal-model')
+const memoryDir = memoryResolution.path
 const text = readFileSync(inputPath, 'utf8')
 const parsed = parseImportedContent(text, args.format ?? 'auto', inputPath)
 const source = buildSourceEnvelope({ messages: parsed.messages, format: parsed.format, inputPath })
@@ -27,6 +29,11 @@ console.log(JSON.stringify({
   candidates: batch.candidates.length,
   source_file: sourcePath,
   candidate_file: candidatePath,
+  memory_dir: memoryDir,
+  memory_dir_source: memoryResolution.source,
+  relative_memory_dir_warning: memoryResolution.relative
+    ? 'This path was resolved against the CLI working directory. Use --memory-dir with an absolute path or set TACITWEAVE_MEMORY_DIR to share memory with DSH.'
+    : null,
   already_imported: Boolean(priorBatchPath),
   personal_model_changed: false,
 }, null, 2))

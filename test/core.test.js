@@ -42,7 +42,34 @@ test('configured gated tools are exact matches', () => {
 })
 
 test('question renders policy boundaries', () => {
-  const text = renderCalibrationQuestion({ ...lowRiskPolicy, reservedDecisions: ['最终方法'] })
+  const text = renderCalibrationQuestion({
+    ...lowRiskPolicy,
+    reservedDecisions: ['最终方法'],
+    activatedMemoryIds: ['pref-plugin-autonomy'],
+  })
   assert.match(text, /保留给用户：最终方法/)
   assert.match(text, /判断置信度：0\.95/)
+  assert.match(text, /拟启用记忆：pref-plugin-autonomy/)
+})
+
+test('calibration question follows the requested conversation language', () => {
+  const english = normalizePolicy({
+    task_summary: 'Rename a local variable',
+    action_mode: 'explain_then_act',
+    assumptions: ['The change is reversible'],
+    autonomous_actions: ['Edit the file'],
+    reserved_decisions: ['Whether to publish'],
+    risk_level: 'low',
+    confidence: 0.9,
+    rationale: 'The user asked for the change directly',
+    display_language: 'en',
+  })
+  const text = renderCalibrationQuestion(english)
+  assert.match(text, /Current task: Rename a local variable/)
+  assert.match(text, /Suggested collaboration mode: explain, then act/)
+  assert.doesNotMatch(text, /当前任务|风险等级/)
+  assert.deepEqual(
+    interpretCalibrationAnswer({ selected: ['Accurate, continue'] }),
+    { status: 'approved', correction: '' },
+  )
 })

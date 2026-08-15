@@ -18,6 +18,7 @@ The project tests a narrow question: does an explicit, editable collaboration po
 - Appends user corrections to `.personal-model/feedback.jsonl` and a prioritized local review queue.
 - Blocks configured file, shell, terminal, delegation, scheduling, and plugin tools until calibration succeeds.
 - Exports a size-limited project context file with basic secret filtering.
+- Adds a local-only TacitWeave tab under Web Settings → Plugins for enabling, filtering, and reviewing memory.
 
 ## Compatibility
 
@@ -43,6 +44,14 @@ Install TacitWeave from GitHub:
 dsh plugin --profile web add github:TorTeTian/tacitweave
 ```
 
+To test an unmerged branch, include the branch name explicitly:
+
+```powershell
+dsh plugin --profile web add "github:TorTeTian/tacitweave#agent/fix-ingest-and-memory-path"
+```
+
+After installation, `C:\Users\<you>\.dsh\profiles\web\package.json` should contain a GitHub dependency, not a `link:` entry. A `link:` entry points DSH at a local checkout and can make Node resolve runtime dependencies from the wrong directory. Remove that installation and add the quoted GitHub spec again; do not substitute a downloaded folder or tarball when testing GitHub installation.
+
 For local development, clone the repository and install it from the checkout:
 
 ```powershell
@@ -54,6 +63,14 @@ dsh web
 ```
 
 The repository is plain JavaScript and has no `prepare` build script. For repeatable tests, use a known commit instead of relying on a moving branch.
+
+If startup reports `ERR_MODULE_NOT_FOUND` for `@deepseek-ai/schemastery` or `@deepseek-ai/dsh-tools`, first inspect the profile package file:
+
+```powershell
+Select-String -Path "$env:USERPROFILE\.dsh\profiles\web\package.json" -Pattern 'dsh-tacitweave'
+```
+
+If the result begins with `link:`, reinstall it with the GitHub command above. TacitWeave declares both directly imported runtime packages as regular dependencies so a genuine GitHub installation installs them alongside the bundle.
 
 ## Create a local memory directory
 
@@ -76,6 +93,8 @@ If the agent skips calibration and calls a protected tool, DSH denies the tool c
 ## Import long-term memory
 
 [WeaveSpec v0.2](docs/WEAVESPEC.md) defines a platform-neutral Personal Model with separate decision boundaries and preferences, evidence-derived confidence, scope, exclusions, activation tiers, review status, revocation, and provenance. The deterministic importer looks only for explicit preference language in user-authored messages. It does not ask a model for a personality summary.
+
+Recognized ChatGPT/Codex reference envelopes containing `conversationId` and `priorConversation` are structurally expanded before preference extraction. Assistant text inside embedded history remains non-evidence, and raw outer JSON is never emitted as a candidate claim.
 
 Import a ChatGPT `conversations.json`, Markdown file, or JSONL transcript:
 
@@ -150,14 +169,47 @@ The exporter skips the complete `.personal-model` directory, Git data, dependenc
 
 By default, the bundle reads `.personal-model` from the current working directory. Override the `tacitweave` row in the profile's `cordis.patch.yml` when the memory lives elsewhere.
 
+Because a relative directory depends on where DSH or the CLI was started, use one absolute location for real testing. Either configure `memoryDir` with an absolute path or set `TACITWEAVE_MEMORY_DIR` before starting DSH and running CLI commands:
+
+```powershell
+$env:TACITWEAVE_MEMORY_DIR = 'D:\TacitWeave\.personal-model'
+node .\bin\weave-review.mjs where
+node .\bin\weave-ingest.mjs --input <path> --format auto
+dsh web
+```
+
+`weave-ingest` prints the resolved memory directory and warns when a relative path was used. `tacitweave_inspect` reports the configured value, startup working directory, resolved path, and the same warning. This makes CLI/plugin divergence visible before review.
+
 The main settings are:
 
 - `memoryDir`: directory containing the private memory files
 - `projectId`: stable identifier used to isolate tentative project memory
 - `calibrationMode`: `always`, `adaptive`, or `off`
 - `memoryReviewMode`: `selective` or `off`
+- `language`: `auto` (follow the latest user message), `zh-CN`, or `en`
 - `maxMemoryChars`: maximum number of memory characters inserted into each model step
 - `gatedTools`: tool names that require calibration before execution
+
+### Web memory dashboard
+
+The Web profile adds **Settings → Plugins → TacitWeave**. It provides:
+
+- a master personalization switch;
+- an “ask before activation” switch;
+- an activation confidence threshold from `0.00` to `1.00`;
+- an activation-notice switch;
+- an optional page-wide floating badge showing the pending temporary-memory count;
+- separate long-term and temporary-memory lists;
+- reversible per-memory enable switches; and
+- accept, defer, and reject actions for temporary memories.
+
+Dashboard preferences are stored in `.personal-model/memory_controls.json`. Disabling an item writes only its ID to that control file; it does not delete or rewrite the original memory or evidence. Accepting or rejecting a temporary memory uses the same audited WeaveSpec review path as the CLI and agent tool.
+
+The floating badge sits above the lower-right edge of the Web interface and stays visible even when Settings is closed. Clicking it opens a compact review panel for up to five pending memories, with accept, defer, and reject actions. Its count refreshes immediately after dashboard actions and every 15 seconds after changes made by the agent or CLI. It is hidden whenever TacitWeave or the badge itself is switched off.
+
+The dashboard API is served at `/tacitweave/api`. It returns only the review fields shown by the UI, never raw evidence. It accepts requests only from a loopback client; writes additionally require an exact same-origin browser request. Responses are marked `no-store`, and TacitWeave has no telemetry or network client.
+
+When “ask before activation” is off, the model selects relevant enabled memories whose confidence meets the configured threshold. The threshold is a confidence floor, not a relevance score: the model must still ignore unrelated memories. If the activation notice is enabled, the model states the selected memory and confidence in one sentence before its substantive response.
 
 ## ChatGPT desktop support
 
