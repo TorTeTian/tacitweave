@@ -1,6 +1,6 @@
 {
   "name": "dsh-tacitweave",
-  "version": "0.1.0-test.1",
+  "version": "0.2.0-test.1",
   "description": "TEST-ONLY TacitWeave personal interaction-policy calibration bundle for DeepSeek Harness",
   "type": "module",
   "main": "index.js",

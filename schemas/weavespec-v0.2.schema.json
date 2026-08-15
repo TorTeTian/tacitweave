@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/TorTeTian/tacitweave/schemas/weavespec-v0.2.schema.json",
+  "title": "WeaveSpec v0.2 Personal Model",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "subject", "updated_at", "preferences", "decision_boundaries", "safety_invariants"],
+  "properties": {
+    "schema_version": { "const": "weavespec/0.2" },
+    "subject": {
+      "type": "object", "additionalProperties": false, "required": ["id"],
+      "properties": { "id": { "type": "string", "minLength": 1, "maxLength": 128 }, "label": { "type": ["string", "null"], "maxLength": 200 } }
+    },
+    "updated_at": { "type": ["string", "null"], "format": "date-time" },
+    "preferences": { "type": "array", "items": { "$ref": "#/$defs/record" } },
+    "decision_boundaries": { "type": "array", "items": { "$ref": "#/$defs/record" } },
+    "safety_invariants": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 1000 } }
+  },
+  "$defs": {
+    "stringArray": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 300 }, "uniqueItems": true },
+    "scope": {
+      "type": "object", "additionalProperties": false,
+      "required": ["domains", "actions", "risk", "reversibility", "projects"],
+      "properties": {
+        "domains": { "$ref": "#/$defs/stringArray" }, "actions": { "$ref": "#/$defs/stringArray" },
+        "risk": { "type": "array", "items": { "enum": ["low", "medium", "high", "critical", "unspecified"] }, "uniqueItems": true },
+        "reversibility": { "type": "array", "items": { "enum": ["reversible", "partly_reversible", "irreversible", "unspecified"] }, "uniqueItems": true },
+        "projects": { "$ref": "#/$defs/stringArray" }
+      }
+    },
+    "evidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source_id", "message_id", "timestamp", "excerpt", "excerpt_sha256"],
+      "properties": {
+        "source_id": { "type": "string", "minLength": 1, "maxLength": 160 }, "message_id": { "type": ["string", "null"], "maxLength": 200 },
+        "timestamp": { "type": ["string", "null"], "format": "date-time" }, "excerpt": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "excerpt_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "evidence_type": { "enum": ["direct_statement", "direct_correction", "legacy"] }
+      }
+    },
+    "confidenceBasis": {
+      "type": "object", "additionalProperties": false,
+      "required": ["direct_user_statements", "direct_corrections", "evidence_count", "unique_sources", "scoped", "user_confirmed", "conflict_count"],
+      "properties": {
+        "direct_user_statements": { "type": "integer", "minimum": 0 }, "direct_corrections": { "type": "integer", "minimum": 0 },
+        "evidence_count": { "type": "integer", "minimum": 0 }, "unique_sources": { "type": "integer", "minimum": 0 },
+        "scoped": { "type": "integer", "minimum": 0 }, "user_confirmed": { "type": "boolean" }, "conflict_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "record": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "kind", "claim", "dimension", "scope", "exclusions", "evidence", "confidence", "confidence_basis", "status", "sensitivity", "conflicts_with", "confirmed_at", "last_reviewed_at", "expires_at", "activation", "review", "revoked_at", "revocation_reason", "supersedes"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-zA-Z0-9_.-]{1,160}$" },
+        "kind": { "enum": ["interaction_preference", "decision_boundary", "user_fact", "temporary_context"] },
+        "claim": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "dimension": { "enum": ["autonomy", "confirmation", "decision_ownership", "communication", "explanation", "privacy", "format", "other"] },
+        "scope": { "$ref": "#/$defs/scope" }, "exclusions": { "$ref": "#/$defs/stringArray" },
+        "evidence": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/evidence" } },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 }, "confidence_basis": { "$ref": "#/$defs/confidenceBasis" },
+        "status": { "enum": ["candidate", "user_confirmed", "rejected", "revoked", "superseded"] }, "sensitivity": { "enum": ["normal", "sensitive"] },
+        "conflicts_with": { "$ref": "#/$defs/stringArray" }, "confirmed_at": { "type": ["string", "null"], "format": "date-time" },
+        "last_reviewed_at": { "type": ["string", "null"], "format": "date-time" }, "expires_at": { "type": ["string", "null"], "format": "date-time" },
+        "activation": {
+          "type": "object", "additionalProperties": false, "required": ["session", "project", "cross_project", "high_risk_authority"],
+          "properties": { "session": { "type": "boolean" }, "project": { "type": "boolean" }, "cross_project": { "type": "boolean" }, "high_risk_authority": { "const": false } }
+        },
+        "review": {
+          "type": "object", "additionalProperties": false, "required": ["priority", "reasons", "deferred_until"],
+          "properties": { "priority": { "type": "integer", "minimum": 0, "maximum": 100 }, "reasons": { "$ref": "#/$defs/stringArray" }, "deferred_until": { "type": ["string", "null"], "format": "date-time" } }
+        },
+        "revoked_at": { "type": ["string", "null"], "format": "date-time" }, "revocation_reason": { "type": ["string", "null"], "maxLength": 1000 },
+        "supersedes": { "$ref": "#/$defs/stringArray" }
+      }
+    }
+  }
+}

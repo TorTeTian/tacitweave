@@ -1,5 +1,5 @@
 {
-  "schema_version": "weavespec/0.1",
+  "schema_version": "weavespec/0.2",
   "subject": {
     "id": "example-user",
     "label": null
@@ -37,14 +37,29 @@
         }
       ],
       "confidence": 1,
+      "confidence_basis": {
+        "direct_user_statements": 1,
+        "direct_corrections": 0,
+        "evidence_count": 1,
+        "unique_sources": 1,
+        "scoped": 4,
+        "user_confirmed": true,
+        "conflict_count": 0
+      },
       "status": "user_confirmed",
       "sensitivity": "normal",
       "conflicts_with": [],
       "confirmed_at": "2026-01-01T00:00:00.000Z",
       "last_reviewed_at": "2026-01-01T00:00:00.000Z",
-      "expires_at": null
+      "expires_at": null,
+      "activation": { "session": true, "project": true, "cross_project": true, "high_risk_authority": false },
+      "review": { "priority": 0, "reasons": ["user_confirmed"], "deferred_until": null },
+      "revoked_at": null,
+      "revocation_reason": null,
+      "supersedes": []
     }
   ],
+  "decision_boundaries": [],
   "safety_invariants": [
     "Destructive, irreversible, financial, privacy-sensitive, publishing, production, and external communication actions require explicit confirmation.",
     "A general preference for autonomy never overrides a narrower risk boundary."
