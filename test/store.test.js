@@ -111,6 +111,7 @@ test('dashboard controls filter memory without deleting source records', () => {
     const candidate = extractCandidates(source).candidates[0]
     store.saveCandidate(candidate)
     const accepted = store.applyReview(candidate.id, 'accept')
+    assert.equal(store.dashboardState().controls.show_floating_badge, true)
     assert.equal(store.dashboardState().long_term.length, 1)
     assert.equal(store.dashboardState().temporary.length, 0)
 
@@ -126,6 +127,8 @@ test('dashboard controls filter memory without deleting source records', () => {
     assert.match(store.renderContext(), /concise explanations/)
     store.updateControls({ enabled: false })
     assert.match(store.renderContext(), /disabled by the user/)
+    store.updateControls({ show_floating_badge: false })
+    assert.equal(store.dashboardState().controls.show_floating_badge, false)
   } finally {
     rmSync(root, { recursive: true, force: true })
   }

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import vm from 'node:vm'
 import { readFileSync } from 'node:fs'
 
-test('browser bundle contributes a TacitWeave settings tab', () => {
+test('browser bundle contributes settings and a global temporary-memory badge', () => {
   let moduleRecord
   const registrations = []
   const styles = []
@@ -24,7 +24,10 @@ test('browser bundle contributes a TacitWeave settings tab', () => {
   const ctx = {
     effect(setup) { setup() },
     slots: {
-      inject(name, setup) { assert.equal(name, 'settings.plugins.tab'); setup() },
+      inject(name, setup) {
+        assert.ok(['settings.plugins.tab', 'shell.overlay'].includes(name))
+        setup()
+      },
       register(options, component) { registrations.push({ options, component }); return () => {} },
     },
   }
@@ -34,4 +37,7 @@ test('browser bundle contributes a TacitWeave settings tab', () => {
     name: 'settings.plugins.tab', id: 'tacitweave', order: 30, label: registrations[0].options.label, inject: undefined,
   })
   assert.equal(registrations[0].options.label(), 'TacitWeave')
+  assert.deepEqual({ ...registrations[1].options, inject: undefined }, {
+    name: 'shell.overlay', id: 'tacitweave-memory-badge', order: 30, inject: undefined,
+  })
 })

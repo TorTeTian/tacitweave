@@ -198,11 +198,14 @@ The Web profile adds **Settings → Plugins → TacitWeave**. It provides:
 - an “ask before activation” switch;
 - an activation confidence threshold from `0.00` to `1.00`;
 - an activation-notice switch;
+- an optional page-wide floating badge showing the pending temporary-memory count;
 - separate long-term and temporary-memory lists;
 - reversible per-memory enable switches; and
 - accept, defer, and reject actions for temporary memories.
 
 Dashboard preferences are stored in `.personal-model/memory_controls.json`. Disabling an item writes only its ID to that control file; it does not delete or rewrite the original memory or evidence. Accepting or rejecting a temporary memory uses the same audited WeaveSpec review path as the CLI and agent tool.
+
+The floating badge sits above the lower-right edge of the Web interface and stays visible even when Settings is closed. Clicking it opens a compact review panel for up to five pending memories, with accept, defer, and reject actions. Its count refreshes immediately after dashboard actions and every 15 seconds after changes made by the agent or CLI. It is hidden whenever TacitWeave or the badge itself is switched off.
 
 The dashboard API is served at `/tacitweave/api`. It returns only the review fields shown by the UI, never raw evidence. It accepts requests only from a loopback client; writes additionally require an exact same-origin browser request. Responses are marked `no-store`, and TacitWeave has no telemetry or network client.
 

@@ -71,6 +71,9 @@ export class MemoryStore {
       announce_activation: typeof patch.announce_activation === 'boolean'
         ? patch.announce_activation
         : current.announce_activation,
+      show_floating_badge: typeof patch.show_floating_badge === 'boolean'
+        ? patch.show_floating_badge
+        : current.show_floating_badge,
     })
     writeJsonAtomic(this.controlsPath, next)
     return next
@@ -371,6 +374,7 @@ function defaultControls() {
     ask_before_activation: true,
     activation_threshold: 0.65,
     announce_activation: true,
+    show_floating_badge: true,
     disabled_long_term_ids: [],
     disabled_temporary_ids: [],
   }
@@ -384,6 +388,7 @@ function normalizeControls(value = {}) {
     ask_before_activation: value.ask_before_activation !== false,
     activation_threshold: Number.isFinite(threshold) ? Math.min(1, Math.max(0, threshold)) : 0.65,
     announce_activation: value.announce_activation !== false,
+    show_floating_badge: value.show_floating_badge !== false,
     disabled_long_term_ids: unique(Array.isArray(value.disabled_long_term_ids) ? value.disabled_long_term_ids.map(String) : []),
     disabled_temporary_ids: unique(Array.isArray(value.disabled_temporary_ids) ? value.disabled_temporary_ids.map(String) : []),
   }
