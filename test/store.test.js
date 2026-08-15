@@ -101,3 +101,52 @@ test('DSH runtime context excludes expired preferences', () => {
     rmSync(root, { recursive: true, force: true })
   }
 })
+
+test('dashboard controls filter memory without deleting source records', () => {
+  const root = mkdtempSync(join(tmpdir(), 'tacitweave-store-'))
+  try {
+    const store = new MemoryStore(root, { projectId: 'alpha' })
+    const parsed = parseImportedContent('I prefer concise explanations for routine code work.', 'markdown', 'notes.md')
+    const source = buildSourceEnvelope({ messages: parsed.messages, format: parsed.format, inputPath: 'notes.md' })
+    const candidate = extractCandidates(source).candidates[0]
+    store.saveCandidate(candidate)
+    const accepted = store.applyReview(candidate.id, 'accept')
+    assert.equal(store.dashboardState().long_term.length, 1)
+    assert.equal(store.dashboardState().temporary.length, 0)
+
+    store.setMemoryEnabled('long_term', accepted.memory_id, false)
+    assert.doesNotMatch(store.renderContext(), /concise explanations/)
+    assert.equal(store.readModel().preferences.length, 1)
+    assert.equal(store.dashboardState().long_term[0].enabled, false)
+
+    store.setMemoryEnabled('long_term', accepted.memory_id, true)
+    store.updateControls({ activation_threshold: 1 })
+    assert.doesNotMatch(store.renderContext(), /concise explanations/)
+    store.updateControls({ activation_threshold: 0.5 })
+    assert.match(store.renderContext(), /concise explanations/)
+    store.updateControls({ enabled: false })
+    assert.match(store.renderContext(), /disabled by the user/)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('temporary memory toggles and review remain separate operations', () => {
+  const root = mkdtempSync(join(tmpdir(), 'tacitweave-store-'))
+  try {
+    const store = new MemoryStore(root, { projectId: 'alpha' })
+    const candidate = createCalibrationCandidate({
+      correction: '低风险插件制作可以直接执行。', policy: { riskLevel: 'low' }, projectId: 'alpha',
+    })
+    store.saveCandidate(candidate)
+    store.setMemoryEnabled('temporary', candidate.id, false)
+    assert.equal(store.runtimeCandidates().length, 0)
+    assert.equal(store.dashboardState().temporary[0].enabled, false)
+    assert.equal(store.readModel().preferences.length, 0)
+    store.applyReview(candidate.id, 'accept')
+    assert.equal(store.dashboardState().temporary.length, 0)
+    assert.equal(store.dashboardState().long_term.length, 1)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})

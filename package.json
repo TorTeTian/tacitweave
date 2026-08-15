@@ -8,6 +8,8 @@
     ".": "./index.js",
     "./core": "./src/core.js",
     "./paths": "./src/paths.js",
+    "./web-api": "./src/web-api.js",
+    "./client": "./.dsh-plugin/client.js",
     "./package.json": "./package.json"
   },
   "bin": {
@@ -17,6 +19,7 @@
   },
   "files": [
     "index.js",
+    ".dsh-plugin/",
     "src/",
     "bin/",
     "cordis.patch.yml",
@@ -28,13 +31,19 @@
     "examples/"
   ],
   "scripts": {
-    "check": "node --check index.js && node --check src/core.js && node --check src/paths.js && node --check src/store.js && node --check src/weavespec.js && node --check bin/export-context.mjs && node --check bin/weave-ingest.mjs && node --check bin/weave-review.mjs",
+    "check": "node --check index.js && node --check src/core.js && node --check src/paths.js && node --check src/store.js && node --check src/weavespec.js && node --check src/web-api.js && node --check .dsh-plugin/client.js && node --check bin/export-context.mjs && node --check bin/weave-ingest.mjs && node --check bin/weave-review.mjs",
     "test": "node --test \"test/*.test.js\"",
     "pack:dry": "npm pack --dry-run --cache ./.npm-cache"
   },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "slots"
+      ]
     }
   },
   "keywords": [
@@ -56,6 +65,7 @@
     "@deepseek-ai/cordis": "^4.0.1",
     "@deepseek-ai/dsh-agent": "^0.1.0-rc.6",
     "@deepseek-ai/dsh-system-prompt": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-host-webserver": "^0.1.0-rc.5",
     "@deepseek-ai/dsh-user-questions": "^0.1.0-rc.6"
   }
 }

@@ -22,6 +22,7 @@ export class MemoryStore {
     this.modelPath = join(this.root, 'personal_model.json')
     this.notesPath = join(this.root, 'current_context.md')
     this.feedbackPath = join(this.root, 'feedback.jsonl')
+    this.controlsPath = join(this.root, 'memory_controls.json')
     this.policiesDir = join(this.root, 'policies')
     this.sourcesDir = join(this.root, 'sources')
     this.candidatesDir = join(this.root, 'candidates')
@@ -34,6 +35,7 @@ export class MemoryStore {
     mkdirSync(this.sourcesDir, { recursive: true })
     mkdirSync(this.candidatesDir, { recursive: true })
     if (!existsSync(this.modelPath)) writeJson(this.modelPath, createEmptyModel())
+    if (!existsSync(this.controlsPath)) writeJson(this.controlsPath, defaultControls())
     if (!existsSync(this.notesPath)) {
       writeFileSync(this.notesPath, '# Current context\n\nAdd project- or user-confirmed context here.\n', 'utf8')
     }
@@ -47,8 +49,85 @@ export class MemoryStore {
     }
   }
 
+  readControls() {
+    try {
+      return normalizeControls(JSON.parse(readFileSync(this.controlsPath, 'utf8')))
+    } catch {
+      return defaultControls()
+    }
+  }
+
+  updateControls(patch = {}) {
+    const current = this.readControls()
+    const next = normalizeControls({
+      ...current,
+      enabled: typeof patch.enabled === 'boolean' ? patch.enabled : current.enabled,
+      ask_before_activation: typeof patch.ask_before_activation === 'boolean'
+        ? patch.ask_before_activation
+        : current.ask_before_activation,
+      activation_threshold: Number.isFinite(Number(patch.activation_threshold))
+        ? Number(patch.activation_threshold)
+        : current.activation_threshold,
+      announce_activation: typeof patch.announce_activation === 'boolean'
+        ? patch.announce_activation
+        : current.announce_activation,
+    })
+    writeJsonAtomic(this.controlsPath, next)
+    return next
+  }
+
+  setMemoryEnabled(kind, id, enabled) {
+    const controls = this.readControls()
+    const key = kind === 'temporary' ? 'disabled_temporary_ids' : 'disabled_long_term_ids'
+    const exists = kind === 'temporary'
+      ? this.listCandidates('all').some(item => item.id === id)
+      : [...(this.readModel().preferences ?? []), ...(this.readModel().decision_boundaries ?? [])]
+          .some(item => item.id === id)
+    if (!exists) throw new Error(`Memory not found: ${id}`)
+    const ids = new Set(controls[key])
+    if (enabled) ids.delete(id)
+    else ids.add(id)
+    const next = normalizeControls({ ...controls, [key]: [...ids] })
+    writeJsonAtomic(this.controlsPath, next)
+    return next
+  }
+
+  dashboardState() {
+    const controls = this.readControls()
+    const model = this.readModel()
+    const longTerm = [...(model.decision_boundaries ?? []), ...(model.preferences ?? [])]
+      .filter(item => item.status === 'user_confirmed')
+      .map(item => ({
+        id: item.id,
+        kind: item.kind,
+        claim: item.claim,
+        confidence: item.confidence,
+        status: item.status,
+        scope: item.scope,
+        exclusions: item.exclusions ?? [],
+        conflicts_with: item.conflicts_with ?? [],
+        enabled: !controls.disabled_long_term_ids.includes(item.id),
+      }))
+    const temporary = this.listCandidates('candidate').map(item => ({
+      ...publicCandidate(item),
+      status: item.status,
+      enabled: !controls.disabled_temporary_ids.includes(item.id),
+    }))
+    return {
+      protocol: 'tacitweave/dashboard-v1',
+      controls,
+      long_term: longTerm,
+      temporary,
+      review: this.reviewSummary(),
+    }
+  }
+
   renderContext(maxChars = 12000) {
-    const model = JSON.stringify(toRuntimeModel(this.readModel(), this.projectId), null, 2)
+    const controls = this.readControls()
+    if (!controls.enabled) {
+      return '## TacitWeave memory\n\nMemory personalization is disabled by the user. Do not activate, cite, or infer behavior from stored long-term or temporary memory.'
+    }
+    const model = JSON.stringify(toRuntimeModel(this.readModel(), this.projectId, controls), null, 2)
     const tentative = JSON.stringify(this.runtimeCandidates(), null, 2)
     const review = this.reviewSummary()
     let notes = ''
@@ -82,12 +161,14 @@ export class MemoryStore {
       personal_model_file: this.modelPath,
       current_context_file: this.notesPath,
       feedback_file: this.feedbackPath,
+      controls_file: this.controlsPath,
       policies_dir: this.policiesDir,
       sources_dir: this.sourcesDir,
       candidates_dir: this.candidatesDir,
       review: this.reviewSummary(),
       tentative_project_candidates: this.runtimeCandidates(),
       personal_model: this.readModel(),
+      controls: this.readControls(),
     }
   }
 
@@ -162,13 +243,16 @@ export class MemoryStore {
   }
 
   runtimeCandidates() {
+    const controls = this.readControls()
+    if (!controls.enabled) return []
     const now = Date.now()
     return this.listCandidates('candidate')
       .filter(candidate => !candidate.expires_at || Date.parse(candidate.expires_at) > now)
       .filter(candidate => candidate.activation?.project)
       .filter(candidate => candidate.scope?.projects?.includes(this.projectId))
       .filter(candidate => !(candidate.conflicts_with?.length))
-      .filter(candidate => candidate.confidence >= 0.5)
+      .filter(candidate => candidate.confidence >= controls.activation_threshold)
+      .filter(candidate => !controls.disabled_temporary_ids.includes(candidate.id))
       .sort((a, b) => b.confidence - a.confidence)
       .slice(0, 5)
       .map(publicCandidate)
@@ -199,6 +283,19 @@ export class MemoryStore {
       const projects = candidate.scope?.projects ?? []
       return projects.length === 0 || projects.includes(this.projectId)
     })
+  }
+
+  activationRecords(ids = []) {
+    const wanted = new Set(ids)
+    if (!wanted.size) return []
+    const controls = this.readControls()
+    if (!controls.enabled) return []
+    const model = toRuntimeModel(this.readModel(), this.projectId, controls)
+    return [
+      ...(model.decision_boundaries ?? []),
+      ...(model.preferences ?? []),
+      ...this.runtimeCandidates(),
+    ].filter(item => wanted.has(item.id))
   }
 
   applyReview(id, action, options = {}) {
@@ -250,9 +347,12 @@ export class MemoryStore {
   }
 }
 
-function toRuntimeModel(model, projectId) {
+function toRuntimeModel(model, projectId, controls = defaultControls()) {
   const now = Date.now()
-  const active = record => record.status === 'user_confirmed' && (!record.expires_at || Date.parse(record.expires_at) > now)
+  const active = record => record.status === 'user_confirmed'
+    && (!record.expires_at || Date.parse(record.expires_at) > now)
+    && record.confidence >= controls.activation_threshold
+    && !controls.disabled_long_term_ids.includes(record.id)
   const project = record => !(record.scope?.projects?.length) || record.scope.projects.includes(projectId)
   return {
     schema_version: model.schema_version,
@@ -261,6 +361,31 @@ function toRuntimeModel(model, projectId) {
     decision_boundaries: (model.decision_boundaries ?? []).filter(active).filter(project).map(runtimeRecord),
     preferences: (model.preferences ?? []).filter(active).filter(project).map(runtimeRecord),
     safety_invariants: model.safety_invariants,
+  }
+}
+
+function defaultControls() {
+  return {
+    schema_version: 1,
+    enabled: true,
+    ask_before_activation: true,
+    activation_threshold: 0.65,
+    announce_activation: true,
+    disabled_long_term_ids: [],
+    disabled_temporary_ids: [],
+  }
+}
+
+function normalizeControls(value = {}) {
+  const threshold = Number(value.activation_threshold)
+  return {
+    schema_version: 1,
+    enabled: value.enabled !== false,
+    ask_before_activation: value.ask_before_activation !== false,
+    activation_threshold: Number.isFinite(threshold) ? Math.min(1, Math.max(0, threshold)) : 0.65,
+    announce_activation: value.announce_activation !== false,
+    disabled_long_term_ids: unique(Array.isArray(value.disabled_long_term_ids) ? value.disabled_long_term_ids.map(String) : []),
+    disabled_temporary_ids: unique(Array.isArray(value.disabled_temporary_ids) ? value.disabled_temporary_ids.map(String) : []),
   }
 }
 

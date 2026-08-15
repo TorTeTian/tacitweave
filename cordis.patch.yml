@@ -5,6 +5,7 @@
         - systemPrompt
         - tools
         - userQuestions
+        - webServer
       config:
         memoryDir: !!js process.env.TACITWEAVE_MEMORY_DIR || '.personal-model'
         projectId: current-project

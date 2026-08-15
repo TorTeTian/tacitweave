@@ -18,6 +18,7 @@ The project tests a narrow question: does an explicit, editable collaboration po
 - Appends user corrections to `.personal-model/feedback.jsonl` and a prioritized local review queue.
 - Blocks configured file, shell, terminal, delegation, scheduling, and plugin tools until calibration succeeds.
 - Exports a size-limited project context file with basic secret filtering.
+- Adds a local-only TacitWeave tab under Web Settings → Plugins for enabling, filtering, and reviewing memory.
 
 ## Compatibility
 
@@ -188,6 +189,24 @@ The main settings are:
 - `language`: `auto` (follow the latest user message), `zh-CN`, or `en`
 - `maxMemoryChars`: maximum number of memory characters inserted into each model step
 - `gatedTools`: tool names that require calibration before execution
+
+### Web memory dashboard
+
+The Web profile adds **Settings → Plugins → TacitWeave**. It provides:
+
+- a master personalization switch;
+- an “ask before activation” switch;
+- an activation confidence threshold from `0.00` to `1.00`;
+- an activation-notice switch;
+- separate long-term and temporary-memory lists;
+- reversible per-memory enable switches; and
+- accept, defer, and reject actions for temporary memories.
+
+Dashboard preferences are stored in `.personal-model/memory_controls.json`. Disabling an item writes only its ID to that control file; it does not delete or rewrite the original memory or evidence. Accepting or rejecting a temporary memory uses the same audited WeaveSpec review path as the CLI and agent tool.
+
+The dashboard API is served at `/tacitweave/api`. It returns only the review fields shown by the UI, never raw evidence. It accepts requests only from a loopback client; writes additionally require an exact same-origin browser request. Responses are marked `no-store`, and TacitWeave has no telemetry or network client.
+
+When “ask before activation” is off, the model selects relevant enabled memories whose confidence meets the configured threshold. The threshold is a confidence floor, not a relevance score: the model must still ignore unrelated memories. If the activation notice is enabled, the model states the selected memory and confidence in one sentence before its substantive response.
 
 ## ChatGPT desktop support
 

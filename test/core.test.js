@@ -42,9 +42,14 @@ test('configured gated tools are exact matches', () => {
 })
 
 test('question renders policy boundaries', () => {
-  const text = renderCalibrationQuestion({ ...lowRiskPolicy, reservedDecisions: ['最终方法'] })
+  const text = renderCalibrationQuestion({
+    ...lowRiskPolicy,
+    reservedDecisions: ['最终方法'],
+    activatedMemoryIds: ['pref-plugin-autonomy'],
+  })
   assert.match(text, /保留给用户：最终方法/)
   assert.match(text, /判断置信度：0\.95/)
+  assert.match(text, /拟启用记忆：pref-plugin-autonomy/)
 })
 
 test('calibration question follows the requested conversation language', () => {

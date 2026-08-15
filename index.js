@@ -2,6 +2,7 @@ import Schema from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { MemoryStore } from './src/store.js'
 import { resolveMemoryDirectory } from './src/paths.js'
+import { registerMemoryDashboardApi } from './src/web-api.js'
 import {
   interpretCalibrationAnswer,
   isGatedTool,
@@ -11,7 +12,7 @@ import {
 } from './src/core.js'
 
 export const name = 'tacitweave'
-export const inject = ['systemPrompt', 'tools', 'userQuestions']
+export const inject = ['systemPrompt', 'tools', 'userQuestions', 'webServer']
 
 export const Config = Schema.object({
   memoryDir: Schema.string().default('.personal-model'),
@@ -34,10 +35,12 @@ export function apply(ctx, config) {
   const store = new MemoryStore(memoryResolution.path, { projectId: config.projectId, memoryResolution })
   const turns = new Map()
 
+  ctx.effect(() => registerMemoryDashboardApi(ctx, store), 'tacitweave: local memory dashboard api')
+
   ctx.systemPrompt.section({
     name: 'personal-model:policy-compiler',
     order: 25,
-    text: policyInstructions(config.calibrationMode, config.language),
+    text: () => policyInstructions(config.calibrationMode, config.language, store.readControls()),
   })
   ctx.systemPrompt.context({
     name: 'personal-model:memory',
@@ -62,7 +65,7 @@ export function apply(ctx, config) {
     if (!isGatedTool(exec.name, config.gatedTools)) return next()
     if (!exec.agent) return { kind: 'deny', reason: 'Personal Model gate requires an owning agent.' }
     const state = turns.get(String(exec.agent.id))
-    if (config.calibrationMode === 'off' || state?.calibrated) return next()
+    if (!store.readControls().enabled || config.calibrationMode === 'off' || state?.calibrated) return next()
     return {
       kind: 'deny',
       reason: `TacitWeave gate: before using side-effect tool "${exec.name}", compile the current interaction policy and call tacitweave_calibrate.`,
@@ -97,6 +100,7 @@ function createCalibrationTool(ctx, store, turns, mode, configuredLanguage) {
       risk_level: { type: 'string', required: true, enum: ['low', 'medium', 'high', 'critical'] },
       confidence: { type: 'number', required: true, description: 'Confidence from 0 to 1.' },
       rationale: { type: 'string', required: true, description: 'Why the memory and current context imply this policy.' },
+      activated_memory_ids: { type: 'array', required: false, items: { type: 'string' }, description: 'IDs of stored memories that are materially relevant to this task. Omit unrelated memories.' },
     },
     output: {
       schema: { type: 'json' },
@@ -108,13 +112,19 @@ function createCalibrationTool(ctx, store, turns, mode, configuredLanguage) {
       const displayLanguage = effectiveLanguage(policy.displayLanguage, configuredLanguage)
       policy.displayLanguage = displayLanguage
       const copy = calibrationCopy(displayLanguage)
+      const controls = store.readControls()
+      const activationRecords = store.activationRecords(policy.activatedMemoryIds)
       let outcome = { status: 'auto_approved', correction: '' }
-      if (shouldCalibrate(policy, mode)) {
+      if (controls.enabled && controls.ask_before_activation
+        && (activationRecords.length > 0 || shouldCalibrate(policy, mode))) {
         const response = await ctx.userQuestions.ask({
           questions: [{
             id: 'interaction-policy',
             header: copy.header,
-            question: renderCalibrationQuestion(policy, displayLanguage),
+            question: [
+              renderCalibrationQuestion(policy, displayLanguage),
+              renderActivationCandidates(activationRecords, displayLanguage),
+            ].filter(Boolean).join('\n\n'),
             options: copy.options,
           }],
           agent: exec.agent,
@@ -127,12 +137,16 @@ function createCalibrationTool(ctx, store, turns, mode, configuredLanguage) {
       state.calibrated = accepted
       turns.set(String(exec.agent.id), state)
       const saved = store.savePolicy({ agentId: exec.agent.id, turn: state.turn, policy, outcome })
+      const activationNotice = accepted && outcome.status !== 'skipped' && controls.announce_activation
+        ? renderActivationNotice(activationRecords, displayLanguage)
+        : null
       return {
         accepted,
         status: outcome.status,
         user_correction: outcome.correction || null,
         policy_file: saved.policyFile,
         memory_candidate: saved.memoryCandidate,
+        activation_notice: activationNotice,
         instruction: localizedInstruction(outcome.status, accepted, displayLanguage),
       }
     },
@@ -151,7 +165,7 @@ function createMemoryReviewTool(ctx, store, mode, configuredLanguage) {
       render: (_args, value) => [{ type: 'text', text: JSON.stringify(value, null, 2) }],
     },
     async execute(args, exec) {
-      if (mode === 'off') return { reviewed: 0, status: 'disabled' }
+      if (mode === 'off' || !store.readControls().enabled) return { reviewed: 0, status: 'disabled' }
       if (!exec.agent) throw new Error('tacitweave_review_memory requires an owning agent')
       const queue = store.reviewQueue(2)
       if (!queue.length) return { reviewed: 0, status: 'empty' }
@@ -204,8 +218,31 @@ function renderMemoryCandidate(candidate, language) {
   ].filter(Boolean).join('\n')
 }
 
-function policyInstructions(mode, languageMode) {
-  return `## TacitWeave personal interaction policy\n\nBefore substantive side-effecting work, distinguish descriptive memory from the prescriptive policy for the current task. Apply this order: universal safety and current instructions; confirmed decision boundaries; confirmed scoped preferences; then tentative same-project candidates. Cite applicable IDs in the rationale. Revoked, superseded, rejected, expired, conflicted, or unsupported claims never affect behavior. Tentative candidates may only help interpret low-risk reversible work in their own project; they never authorize destructive, irreversible, financial, privacy-sensitive, publishing, production, medical, legal, or external actions. If equally specific confirmed records conflict, ask instead of choosing silently.\n\nFor each new user task, compile: task summary, action mode (act/ask/propose/explain_then_act), assumptions, autonomous actions, user-reserved decisions, risk, confidence, and rationale. Call tacitweave_calibrate before gated tools. Calibration mode is ${mode}. Display language mode is ${languageMode}. Set display_language to the language of the user's latest substantive message. Every user-visible free-text argument—including task_summary, assumptions, autonomous_actions, reserved_decisions, and rationale—must be translated into that language before calling the tool. Never show an English internal plan inside a Chinese calibration dialog, or vice versa. Apply the same rule to tacitweave_review_memory. A direct correction becomes a local, project-scoped candidate immediately, while the correction itself outranks older memory for this turn. It becomes durable only after review. Use tacitweave_inspect when the user asks to see files or provenance. After completing a task, call tacitweave_review_memory at most once and only when memory_review_status recommends review or the user asks; it reviews no more than two candidates and is never required to finish the task.`
+function policyInstructions(mode, languageMode, controls) {
+  if (!controls.enabled) return '## TacitWeave\n\nThe user disabled TacitWeave memory personalization. Do not activate stored memories or call TacitWeave calibration/review tools unless the user explicitly asks to inspect or re-enable memory.'
+  const activationMode = controls.ask_before_activation
+    ? 'Ask for confirmation through tacitweave_calibrate before applying selected memory when calibration is required.'
+    : 'Select relevant memory autonomously. Pass every materially used ID in activated_memory_ids; do not pass memories merely because they are available.'
+  return `## TacitWeave personal interaction policy\n\nBefore substantive side-effecting work, distinguish descriptive memory from the prescriptive policy for the current task. Apply this order: universal safety and current instructions; confirmed decision boundaries; confirmed scoped preferences; then tentative same-project candidates. Cite applicable IDs in the rationale. Revoked, superseded, rejected, expired, disabled, below-threshold, conflicted, or unsupported claims never affect behavior. Tentative candidates may only help interpret low-risk reversible work in their own project; they never authorize destructive, irreversible, financial, privacy-sensitive, publishing, production, medical, legal, or external actions. If equally specific confirmed records conflict, ask instead of choosing silently. Activation threshold is ${controls.activation_threshold.toFixed(2)}. ${activationMode}\n\nFor each new user task, compile: task summary, action mode (act/ask/propose/explain_then_act), assumptions, autonomous actions, user-reserved decisions, risk, confidence, rationale, and activated_memory_ids. Call tacitweave_calibrate before gated tools. Calibration mode is ${mode}. Display language mode is ${languageMode}. Set display_language to the language of the user's latest substantive message. Every user-visible free-text argument—including task_summary, assumptions, autonomous_actions, reserved_decisions, and rationale—must already use that language. Never show an English internal plan inside a Chinese calibration dialog, or vice versa. If the tool returns activation_notice, output that sentence verbatim before the substantive response. Apply the same language rule to tacitweave_review_memory. A direct correction becomes a local, project-scoped candidate immediately, while the correction itself outranks older memory for this turn. It becomes durable only after review. Use tacitweave_inspect when the user asks to see files or provenance. After completing a task, call tacitweave_review_memory at most once and only when memory_review_status recommends review or the user asks; it reviews no more than two candidates and is never required to finish the task.`
+}
+
+function renderActivationNotice(records, language) {
+  if (!records.length) return null
+  const primary = records[0]
+  const more = records.length - 1
+  const confidence = Number(primary.confidence ?? 0).toFixed(2)
+  if (language === 'en') {
+    return `Based on prior conversations, I am applying this memory: ${primary.claim} (confidence: ${confidence}${more ? `; plus ${more} other relevant memory item(s)` : ''}).`
+  }
+  return `根据过往交流经验，本轮启用记忆：“${primary.claim}”（可信度：${confidence}${more ? `；另有 ${more} 条相关记忆` : ''}）。`
+}
+
+function renderActivationCandidates(records, language) {
+  if (!records.length) return null
+  if (language === 'en') {
+    return ['Memories proposed for this task:', ...records.map(item => `- ${item.claim} (confidence: ${Number(item.confidence ?? 0).toFixed(2)})`)].join('\n')
+  }
+  return ['本轮拟启用的记忆：', ...records.map(item => `- ${item.claim}（可信度：${Number(item.confidence ?? 0).toFixed(2)}）`)].join('\n')
 }
 
 function effectiveLanguage(requested, configured) {

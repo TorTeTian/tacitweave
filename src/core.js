@@ -12,6 +12,7 @@ export function normalizePolicy(input) {
     riskLevel: VALID_RISKS.has(input.risk_level) ? input.risk_level : 'medium',
     confidence: clamp(Number(input.confidence), 0, 1),
     rationale: cleanText(input.rationale, 1000),
+    activatedMemoryIds: cleanStringArray(input.activated_memory_ids, 12, 160),
     displayLanguage: VALID_LANGUAGES.has(input.display_language) ? input.display_language : 'zh-CN',
   }
   if (!policy.taskSummary) throw new Error('task_summary must not be empty')
@@ -44,6 +45,7 @@ export function renderCalibrationQuestion(policy, language = policy.displayLangu
   if (policy.autonomousActions.length) lines.push(`AI 可自主处理：${policy.autonomousActions.join('；')}`)
   if (policy.reservedDecisions.length) lines.push(`保留给用户：${policy.reservedDecisions.join('；')}`)
   if (policy.rationale) lines.push(`理由：${policy.rationale}`)
+  if (policy.activatedMemoryIds.length) lines.push(`拟启用记忆：${policy.activatedMemoryIds.join('、')}`)
   lines.push('这个判断是否准确？如需修改，请选择“修改”并输入修正。')
   return lines.join('\n')
 }
@@ -70,6 +72,7 @@ function renderEnglishCalibrationQuestion(policy) {
   if (policy.autonomousActions.length) lines.push(`AI may handle autonomously: ${policy.autonomousActions.join('; ')}`)
   if (policy.reservedDecisions.length) lines.push(`Reserved for the user: ${policy.reservedDecisions.join('; ')}`)
   if (policy.rationale) lines.push(`Rationale: ${policy.rationale}`)
+  if (policy.activatedMemoryIds.length) lines.push(`Memories to activate: ${policy.activatedMemoryIds.join(', ')}`)
   lines.push('Is this accurate? To change it, choose “Modify” and enter the correction.')
   return lines.join('\n')
 }
