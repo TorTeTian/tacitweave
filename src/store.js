@@ -16,6 +16,9 @@ export class MemoryStore {
   constructor(memoryDir, options = {}) {
     this.root = resolve(memoryDir)
     this.projectId = sanitizeId(options.projectId ?? 'current-project')
+    this.memoryResolution = options.memoryResolution ?? {
+      path: this.root, configured: String(memoryDir), source: 'configuration', relative: false, cwd: process.cwd(),
+    }
     this.modelPath = join(this.root, 'personal_model.json')
     this.notesPath = join(this.root, 'current_context.md')
     this.feedbackPath = join(this.root, 'feedback.jsonl')
@@ -69,6 +72,12 @@ export class MemoryStore {
   inspect() {
     return {
       memory_dir: this.root,
+      memory_dir_source: this.memoryResolution.source,
+      configured_memory_dir: this.memoryResolution.configured,
+      startup_working_directory: this.memoryResolution.cwd,
+      memory_dir_warning: this.memoryResolution.relative
+        ? 'memoryDir is relative and was resolved against the DSH startup working directory. Use an absolute path or TACITWEAVE_MEMORY_DIR to share it with CLI commands.'
+        : null,
       project_id: this.projectId,
       personal_model_file: this.modelPath,
       current_context_file: this.notesPath,

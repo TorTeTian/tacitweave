@@ -77,6 +77,8 @@ If the agent skips calibration and calls a protected tool, DSH denies the tool c
 
 [WeaveSpec v0.2](docs/WEAVESPEC.md) defines a platform-neutral Personal Model with separate decision boundaries and preferences, evidence-derived confidence, scope, exclusions, activation tiers, review status, revocation, and provenance. The deterministic importer looks only for explicit preference language in user-authored messages. It does not ask a model for a personality summary.
 
+Recognized ChatGPT/Codex reference envelopes containing `conversationId` and `priorConversation` are structurally expanded before preference extraction. Assistant text inside embedded history remains non-evidence, and raw outer JSON is never emitted as a candidate claim.
+
 Import a ChatGPT `conversations.json`, Markdown file, or JSONL transcript:
 
 ```powershell
@@ -149,6 +151,17 @@ The exporter skips the complete `.personal-model` directory, Git data, dependenc
 ## Configuration
 
 By default, the bundle reads `.personal-model` from the current working directory. Override the `tacitweave` row in the profile's `cordis.patch.yml` when the memory lives elsewhere.
+
+Because a relative directory depends on where DSH or the CLI was started, use one absolute location for real testing. Either configure `memoryDir` with an absolute path or set `TACITWEAVE_MEMORY_DIR` before starting DSH and running CLI commands:
+
+```powershell
+$env:TACITWEAVE_MEMORY_DIR = 'D:\TacitWeave\.personal-model'
+node .\bin\weave-review.mjs where
+node .\bin\weave-ingest.mjs --input <path> --format auto
+dsh web
+```
+
+`weave-ingest` prints the resolved memory directory and warns when a relative path was used. `tacitweave_inspect` reports the configured value, startup working directory, resolved path, and the same warning. This makes CLI/plugin divergence visible before review.
 
 The main settings are:
 

@@ -1,6 +1,7 @@
 import Schema from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { MemoryStore } from './src/store.js'
+import { resolveMemoryDirectory } from './src/paths.js'
 import {
   interpretCalibrationAnswer,
   isGatedTool,
@@ -29,7 +30,8 @@ export const Config = Schema.object({
 })
 
 export function apply(ctx, config) {
-  const store = new MemoryStore(config.memoryDir, { projectId: config.projectId })
+  const memoryResolution = resolveMemoryDirectory(config.memoryDir)
+  const store = new MemoryStore(memoryResolution.path, { projectId: config.projectId, memoryResolution })
   const turns = new Map()
 
   ctx.systemPrompt.section({

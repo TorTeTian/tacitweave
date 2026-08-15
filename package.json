@@ -1,12 +1,13 @@
 {
   "name": "dsh-tacitweave",
-  "version": "0.2.0-test.1",
+  "version": "0.2.1-test.1",
   "description": "TEST-ONLY TacitWeave personal interaction-policy calibration bundle for DeepSeek Harness",
   "type": "module",
   "main": "index.js",
   "exports": {
     ".": "./index.js",
     "./core": "./src/core.js",
+    "./paths": "./src/paths.js",
     "./package.json": "./package.json"
   },
   "bin": {
@@ -27,7 +28,7 @@
     "examples/"
   ],
   "scripts": {
-    "check": "node --check index.js && node --check src/core.js && node --check src/store.js && node --check src/weavespec.js && node --check bin/export-context.mjs && node --check bin/weave-ingest.mjs && node --check bin/weave-review.mjs",
+    "check": "node --check index.js && node --check src/core.js && node --check src/paths.js && node --check src/store.js && node --check src/weavespec.js && node --check bin/export-context.mjs && node --check bin/weave-ingest.mjs && node --check bin/weave-review.mjs",
     "test": "node --test \"test/*.test.js\"",
     "pack:dry": "npm pack --dry-run --cache ./.npm-cache"
   },

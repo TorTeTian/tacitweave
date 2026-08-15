@@ -26,6 +26,8 @@ A candidate is never general authorization. Before review it can only help inter
 
 The directory is ignored by Git and omitted from the package. It still contains private text and should be protected accordingly.
 
+Use an absolute `memoryDir` or the same `TACITWEAVE_MEMORY_DIR` environment variable for both DSH and CLI commands. Relative `.personal-model` paths resolve against each process's startup directory and can otherwise create two independent memory stores.
+
 ## Record layers
 
 `decision_boundaries` records define decisions the user retains or actions that need confirmation. `preferences` describe ordinary collaboration style. Every durable record carries concrete scope, exclusions, evidence, a confidence breakdown, activation metadata, review timestamps, conflicts, and optional revocation data.
@@ -46,6 +48,8 @@ node .\bin\weave-review.mjs defer --id <candidate-id> --days 7
 ```
 
 `digest` selects a small batch using direct correction, repetition, conflict, decision-boundary, sensitivity, and project-scope signals. Acceptance can narrow the claim with `--claim`, `--domain`, `--action`, `--risk`, `--reversibility`, `--project`, `--exclude`, and `--expires`.
+
+Before extraction, recognized nested ChatGPT/Codex reference envelopes are parsed as data. Their `priorConversation.conversation` entries become ordinary role-tagged messages; assistant entries remain excluded from evidence, and serialized outer JSON is not treated as a natural-language statement.
 
 DSH offers the same selective flow through `tacitweave_review_memory`, at most two candidates per call. Review is not inserted before ordinary work.
 
