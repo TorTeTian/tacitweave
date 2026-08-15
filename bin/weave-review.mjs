@@ -1,10 +1,14 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import {
   acceptCandidate,
   createEmptyModel,
+  recordProvenance,
   rejectCandidate,
+  restoreRecord,
+  revokeRecord,
+  sourceImpact,
   upgradeModel,
   validateWeaveModel,
 } from '../src/weavespec.js'
@@ -18,9 +22,16 @@ if (command === 'list') listCandidates(args.status ?? 'candidate')
 else if (command === 'show') showCandidate(requiredId())
 else if (command === 'accept') accept(requiredId())
 else if (command === 'reject') reject(requiredId())
+else if (command === 'defer') defer(requiredId())
+else if (command === 'digest') digest()
+else if (command === 'revoke') revoke(requiredId())
+else if (command === 'restore') restore(requiredId())
+else if (command === 'provenance') provenance(requiredId())
+else if (command === 'source-impact') showSourceImpact(requiredSource())
+else if (command === 'delete-source') deleteSource(requiredSource())
 else if (command === 'migrate') migrate()
 else if (command === 'validate') validate()
-else fail('Commands: list, show --id ID, accept --id ID, reject --id ID, migrate, validate')
+else fail('Commands: list, digest, show, accept, reject, defer, revoke, restore, provenance, source-impact, delete-source, migrate, validate')
 
 function listCandidates(status) {
   const records = loadBatches()
@@ -32,10 +43,23 @@ function listCandidates(status) {
       kind: candidate.kind,
       dimension: candidate.dimension,
       confidence: candidate.confidence,
+      review_priority: candidate.review?.priority ?? 0,
+      activation: candidate.activation ?? null,
       conflicts_with: candidate.conflicts_with ?? [],
       claim: candidate.claim,
     }))
   console.log(JSON.stringify({ count: records.length, candidates: records }, null, 2))
+}
+
+function digest() {
+  const limit = Math.max(1, Math.min(20, Number(args.limit ?? 2)))
+  const now = Date.now()
+  const candidates = loadBatches().flatMap(({ batch }) => batch.candidates ?? [])
+    .filter(item => item.status === 'candidate')
+    .filter(item => !item.review?.deferred_until || Date.parse(item.review.deferred_until) <= now)
+    .sort((a, b) => (b.review?.priority ?? 0) - (a.review?.priority ?? 0) || b.confidence - a.confidence)
+    .slice(0, limit)
+  console.log(JSON.stringify({ count: candidates.length, candidates }, null, 2))
 }
 
 function showCandidate(id) {
@@ -59,14 +83,78 @@ function accept(id) {
     exclusions: args.exclude,
     expiresAt: args.expires,
   })
-  const accepted = model.preferences.find(item => item.id === id.replace(/^candidate-/, 'pref-'))
-    ?? model.preferences.find(item => item.claim === (args.claim ?? found.candidate.claim))
+  const records = [...model.preferences, ...model.decision_boundaries]
+  const accepted = records.find(item => item.id === id.replace(/^candidate-/, 'pref-'))
+    ?? records.find(item => item.claim === (args.claim ?? found.candidate.claim))
   found.candidate.status = 'user_confirmed'
   found.candidate.last_reviewed_at = new Date().toISOString()
   found.candidate.accepted_preference_id = accepted?.id ?? null
   writeJsonAtomic(found.path, found.batch)
   writeJsonAtomic(modelPath, model)
-  console.log(JSON.stringify({ accepted_candidate: id, preference_id: accepted?.id ?? null, personal_model_file: modelPath }, null, 2))
+  console.log(JSON.stringify({ accepted_candidate: id, memory_id: accepted?.id ?? null, personal_model_file: modelPath }, null, 2))
+}
+
+function defer(id) {
+  const found = findCandidate(id)
+  if (!found) fail(`Candidate not found: ${id}`)
+  if (found.candidate.status !== 'candidate') fail(`Candidate is already ${found.candidate.status}: ${id}`)
+  const days = Math.max(1, Math.min(365, Number(args.days ?? 7)))
+  const deferredUntil = new Date(Date.now() + days * 86400000).toISOString()
+  found.candidate.review = { ...(found.candidate.review ?? {}), deferred_until: deferredUntil }
+  writeJsonAtomic(found.path, found.batch)
+  console.log(JSON.stringify({ deferred_candidate: id, deferred_until: deferredUntil }, null, 2))
+}
+
+function revoke(id) {
+  const model = revokeRecord(readModel(), id, args.reason ?? 'revoked by user')
+  writeJsonAtomic(modelPath, model)
+  console.log(JSON.stringify({ revoked_memory: id, reason: args.reason ?? 'revoked by user' }, null, 2))
+}
+
+function restore(id) {
+  const model = restoreRecord(readModel(), id)
+  writeJsonAtomic(modelPath, model)
+  console.log(JSON.stringify({ restored_memory: id }, null, 2))
+}
+
+function provenance(id) {
+  const result = recordProvenance(readModel(), id)
+  if (!result) fail(`Memory record not found: ${id}`)
+  console.log(JSON.stringify(result, null, 2))
+}
+
+function showSourceImpact(sourceId) {
+  const confirmed = sourceImpact(readModel(), sourceId)
+  const candidates = loadBatches().flatMap(({ batch }) => batch.candidates ?? [])
+    .filter(record => (record.evidence ?? []).some(item => item.source_id === sourceId))
+    .map(record => ({ id: record.id, status: record.status, claim: record.claim }))
+  console.log(JSON.stringify({ source_id: sourceId, confirmed_memory: confirmed, candidates }, null, 2))
+}
+
+function deleteSource(sourceId) {
+  if (String(args['revoke-dependent']) !== 'true') {
+    fail('delete-source requires --revoke-dependent true so cited confirmed memory is revoked before deletion')
+  }
+  let model = readModel()
+  const impacted = sourceImpact(model, sourceId)
+  for (const record of impacted.filter(item => item.status === 'user_confirmed')) {
+    model = revokeRecord(model, record.id, `source deleted: ${sourceId}`)
+  }
+  writeJsonAtomic(modelPath, model)
+  for (const item of loadBatches()) {
+    let changed = false
+    for (const candidate of item.batch.candidates ?? []) {
+      if (!(candidate.evidence ?? []).some(evidence => evidence.source_id === sourceId)) continue
+      candidate.status = candidate.status === 'candidate' ? 'rejected' : candidate.status
+      candidate.last_reviewed_at = new Date().toISOString()
+      changed = true
+    }
+    if (changed) writeJsonAtomic(item.path, item.batch)
+  }
+  const sourcePath = join(memoryDir, 'sources', `${sourceId}.json`)
+  const sourceFileExisted = existsSync(sourcePath)
+  if (sourceFileExisted) unlinkSync(sourcePath)
+  console.log(JSON.stringify({ deleted_source: sourceId, source_file_existed: sourceFileExisted, revoked_memory: impacted.map(item => item.id) }, null, 2))
 }
 
 function reject(id) {
@@ -125,6 +213,13 @@ function writeJsonAtomic(path, value) {
 function requiredId() {
   if (!args.id) fail(`${command} requires --id <candidate-id>`)
   return String(args.id)
+}
+
+function requiredSource() {
+  if (!args.source) fail(`${command} requires --source <source-id>`)
+  const source = String(args.source)
+  if (!/^[a-zA-Z0-9_-]{1,160}$/.test(source)) fail('source ID contains invalid path characters')
+  return source
 }
 
 function fail(message) {

@@ -4,13 +4,14 @@ Use WeaveSpec for a portable Personal Model. Keep filled-in files outside the Sk
 
 ```json
 {
-  "schema_version": "weavespec/0.1",
+  "schema_version": "weavespec/0.2",
   "subject": {
     "id": "local-user",
     "label": null
   },
   "updated_at": null,
   "preferences": [],
+  "decision_boundaries": [],
   "safety_invariants": [
     "Destructive, irreversible, financial, privacy-sensitive, publishing, production, and external communication actions require explicit confirmation.",
     "A general preference for autonomy never overrides a narrower risk boundary."
@@ -18,7 +19,7 @@ Use WeaveSpec for a portable Personal Model. Keep filled-in files outside the Sk
 }
 ```
 
-Each confirmed preference needs a concrete claim, kind, dimension, scope, exclusions, evidence provenance, confidence, sensitivity, and review timestamps. Use only records with `status: user_confirmed`.
+Each confirmed record needs a concrete claim, kind, dimension, scope, exclusions, evidence provenance, confidence basis, activation limits, sensitivity, and review timestamps. Apply confirmed decision boundaries before preferences. Revoked records remain auditable but inactive.
 
 Keep raw imports and unreviewed candidates outside the formal model:
 

@@ -10,10 +10,12 @@ The project tests a narrow question: does an explicit, editable collaboration po
 
 - Reads `personal_model.json` and `current_context.md` from a project-local `.personal-model` directory.
 - Converts ChatGPT exports, Markdown notes, and JSONL histories into reviewable WeaveSpec candidates.
+- Turns direct calibration corrections into tentative, project-scoped candidates immediately.
+- Promotes only explicitly reviewed candidates into durable memory without widening their declared scope.
 - Compiles an `act`, `ask`, `propose`, or `explain_then_act` policy for each new task.
 - Pauses for confirmation when the policy is uncertain or the task carries enough risk.
 - Saves each policy under `.personal-model/policies/<session>/turn-<n>.json`.
-- Appends user corrections to `.personal-model/feedback.jsonl` for later review.
+- Appends user corrections to `.personal-model/feedback.jsonl` and a prioritized local review queue.
 - Blocks configured file, shell, terminal, delegation, scheduling, and plugin tools until calibration succeeds.
 - Exports a size-limited project context file with basic secret filtering.
 
@@ -73,7 +75,7 @@ If the agent skips calibration and calls a protected tool, DSH denies the tool c
 
 ## Import long-term memory
 
-[WeaveSpec v0.1](docs/WEAVESPEC.md) defines a platform-neutral Personal Model with evidence, scope, exclusions, confidence, review status, and provenance. The deterministic importer looks only for explicit preference language in user-authored messages. It does not ask a model for a personality summary.
+[WeaveSpec v0.2](docs/WEAVESPEC.md) defines a platform-neutral Personal Model with separate decision boundaries and preferences, evidence-derived confidence, scope, exclusions, activation tiers, review status, revocation, and provenance. The deterministic importer looks only for explicit preference language in user-authored messages. It does not ask a model for a personality summary.
 
 Import a ChatGPT `conversations.json`, Markdown file, or JSONL transcript:
 
@@ -85,9 +87,11 @@ This creates a local source envelope and candidate batch without changing the fo
 
 ```powershell
 node .\bin\weave-review.mjs list
+node .\bin\weave-review.mjs digest --limit 2
 node .\bin\weave-review.mjs show --id <candidate-id>
 node .\bin\weave-review.mjs accept --id <candidate-id>
 node .\bin\weave-review.mjs reject --id <candidate-id>
+node .\bin\weave-review.mjs defer --id <candidate-id> --days 7
 ```
 
 Use acceptance options to narrow an extracted claim before promotion:
@@ -102,6 +106,17 @@ Legacy TacitWeave models remain readable. Convert the local file explicitly with
 node .\bin\weave-review.mjs migrate
 node .\bin\weave-review.mjs validate
 ```
+
+Inspect or undo durable memory without erasing its audit trail:
+
+```powershell
+node .\bin\weave-review.mjs provenance --id <memory-id>
+node .\bin\weave-review.mjs revoke --id <memory-id> --reason "outdated"
+node .\bin\weave-review.mjs restore --id <memory-id>
+node .\bin\weave-review.mjs source-impact --source <source-id>
+```
+
+Source deletion is deliberately two-step. Inspect impact first, then use `delete-source --source <source-id> --revoke-dependent true`. Confirmed records citing that source are revoked before the exact local source file is removed.
 
 ## Privacy model
 
@@ -121,7 +136,7 @@ This directory is ignored by Git and omitted from the npm package. The tracked f
 
 Local storage does not mean the memory stays on the machine during a model run. TacitWeave inserts the loaded memory into the DSH model context. If DSH uses a remote model provider, that provider receives the inserted text. The `tacitweave_inspect` output may also become part of the chat transcript. Keep the memory files small, avoid secrets, and check the retention policy of the configured provider. Use a local model endpoint if the prompt itself must remain local.
 
-Source envelopes, candidates, policy records, and feedback can contain user text or task details. Treat the whole `.personal-model` directory as private data. Importing history never changes `personal_model.json`; only an explicit review command promotes one candidate. Calibration corrections remain in the feedback log until a person reviews them.
+Source envelopes, candidates, policy records, and feedback can contain user text or task details. Treat the whole `.personal-model` directory as private data. Importing history never changes `personal_model.json`; only explicit review promotes a candidate. A direct calibration correction is usable immediately only as a tentative signal in the same project and for low-risk interpretation. It cannot authorize consequential action, and review does not widen its project scope unless the user explicitly edits that scope.
 
 ## Export project context
 
@@ -138,13 +153,15 @@ By default, the bundle reads `.personal-model` from the current working director
 The main settings are:
 
 - `memoryDir`: directory containing the private memory files
+- `projectId`: stable identifier used to isolate tentative project memory
 - `calibrationMode`: `always`, `adaptive`, or `off`
+- `memoryReviewMode`: `selective` or `off`
 - `maxMemoryChars`: maximum number of memory characters inserted into each model step
 - `gatedTools`: tool names that require calibration before execution
 
 ## ChatGPT desktop support
 
-Version 0.1 does not enforce the calibration gate in the ChatGPT desktop app. DSH exposes hooks for system prompts, user questions, and pre-execution tool policy; the ChatGPT desktop app does not expose an equivalent local plugin surface. You can provide the exported Markdown to ChatGPT manually, but this only transfers context. It cannot force the model to pause before acting.
+Version 0.2 does not enforce the calibration gate in the ChatGPT desktop app. DSH exposes hooks for system prompts, user questions, and pre-execution tool policy; the ChatGPT desktop app does not expose an equivalent local plugin surface. You can provide the exported Markdown to ChatGPT manually, but this only transfers context. It cannot force the model to pause before acting.
 
 For ChatGPT Work, the repository includes the portable [`tacitweave-calibrate` Skill](skills/tacitweave-calibrate/SKILL.md). It compiles the same task-specific policy, pauses when a boundary needs confirmation, and keeps current corrections separate from long-term memory. The Skill guides model behavior; it cannot intercept Work tools or replace ChatGPT's own permission controls. Keep filled-in Personal Model files outside the Skill package and attach them only when a conversation needs them.
 

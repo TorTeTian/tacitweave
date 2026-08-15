@@ -11,6 +11,10 @@ import {
   extractCandidates,
   parseImportedContent,
   redactSensitive,
+  recordProvenance,
+  restoreRecord,
+  revokeRecord,
+  sourceImpact,
   upgradeModel,
   validateWeaveModel,
   WEAVESPEC_VERSION,
@@ -31,6 +35,19 @@ test('ChatGPT export becomes redacted user evidence and candidates', () => {
   assert.equal(batch.candidates.length, 1)
   assert.equal(batch.candidates[0].dimension, 'autonomy')
   assert.ok(batch.candidates[0].exclusions.includes('production_changes'))
+})
+
+test('confirmed memory can be traced, revoked, and restored', () => {
+  const parsed = parseImportedContent('I prefer concise explanations.', 'markdown', 'notes.md')
+  const source = buildSourceEnvelope({ messages: parsed.messages, format: parsed.format, inputPath: 'notes.md' })
+  const candidate = extractCandidates(source).candidates[0]
+  const confirmed = acceptCandidate(createEmptyModel(), candidate)
+  const id = confirmed.preferences[0].id
+  assert.equal(recordProvenance(confirmed, id).evidence[0].source_id, source.source_id)
+  assert.equal(sourceImpact(confirmed, source.source_id)[0].id, id)
+  const revoked = revokeRecord(confirmed, id, 'outdated')
+  assert.equal(revoked.preferences[0].status, 'revoked')
+  assert.equal(restoreRecord(revoked, id).preferences[0].status, 'user_confirmed')
 })
 
 test('Markdown and JSONL imports preserve explicit user statements', () => {
@@ -102,6 +119,9 @@ test('review CLI keeps candidates separate until explicit acceptance', () => {
     assert.equal(accept.status, 0, accept.stderr)
     const model = JSON.parse(readFileSync(join(memory, 'personal_model.json'), 'utf8'))
     assert.equal(model.preferences[0].status, 'user_confirmed')
+    const unsafeSource = spawnSync(process.execPath, [resolve('bin/weave-review.mjs'), 'source-impact', '--source', '../personal_model', '--memory-dir', memory], { encoding: 'utf8' })
+    assert.equal(unsafeSource.status, 2)
+    assert.match(unsafeSource.stderr, /invalid path characters/)
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
@@ -113,7 +133,7 @@ test('redaction removes common credentials without pretending to anonymize prose
 })
 
 test('published schema and example model match the runtime contract', () => {
-  const schema = JSON.parse(readFileSync(resolve('schemas/weavespec-v0.1.schema.json'), 'utf8'))
+  const schema = JSON.parse(readFileSync(resolve('schemas/weavespec-v0.2.schema.json'), 'utf8'))
   const example = JSON.parse(readFileSync(resolve('examples/memory/personal_model.example.json'), 'utf8'))
   assert.equal(schema.properties.schema_version.const, WEAVESPEC_VERSION)
   assert.equal(validateWeaveModel(example).valid, true)
