@@ -43,6 +43,14 @@ Install TacitWeave from GitHub:
 dsh plugin --profile web add github:TorTeTian/tacitweave
 ```
 
+To test an unmerged branch, include the branch name explicitly:
+
+```powershell
+dsh plugin --profile web add "github:TorTeTian/tacitweave#agent/fix-ingest-and-memory-path"
+```
+
+After installation, `C:\Users\<you>\.dsh\profiles\web\package.json` should contain a GitHub dependency, not a `link:` entry. A `link:` entry points DSH at a local checkout and can make Node resolve runtime dependencies from the wrong directory. Remove that installation and add the quoted GitHub spec again; do not substitute a downloaded folder or tarball when testing GitHub installation.
+
 For local development, clone the repository and install it from the checkout:
 
 ```powershell
@@ -54,6 +62,14 @@ dsh web
 ```
 
 The repository is plain JavaScript and has no `prepare` build script. For repeatable tests, use a known commit instead of relying on a moving branch.
+
+If startup reports `ERR_MODULE_NOT_FOUND` for `@deepseek-ai/schemastery` or `@deepseek-ai/dsh-tools`, first inspect the profile package file:
+
+```powershell
+Select-String -Path "$env:USERPROFILE\.dsh\profiles\web\package.json" -Pattern 'dsh-tacitweave'
+```
+
+If the result begins with `link:`, reinstall it with the GitHub command above. TacitWeave declares both directly imported runtime packages as regular dependencies so a genuine GitHub installation installs them alongside the bundle.
 
 ## Create a local memory directory
 
