@@ -169,6 +169,7 @@ The main settings are:
 - `projectId`: stable identifier used to isolate tentative project memory
 - `calibrationMode`: `always`, `adaptive`, or `off`
 - `memoryReviewMode`: `selective` or `off`
+- `language`: `auto` (follow the latest user message), `zh-CN`, or `en`
 - `maxMemoryChars`: maximum number of memory characters inserted into each model step
 - `gatedTools`: tool names that require calibration before execution
 
