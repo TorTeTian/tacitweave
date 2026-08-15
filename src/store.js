@@ -1,17 +1,7 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { sanitizeId } from './core.js'
-
-const EMPTY_MODEL = {
-  schema_version: 1,
-  user_label: 'local-user',
-  updated_at: null,
-  preferences: [],
-  safety_invariants: [
-    'Destructive, irreversible, financial, privacy-sensitive, publishing, and external communication actions require explicit confirmation.',
-    'A general preference for autonomy never overrides a narrower risk boundary.',
-  ],
-}
+import { createEmptyModel, upgradeModel } from './weavespec.js'
 
 export class MemoryStore {
   constructor(memoryDir) {
@@ -20,13 +10,17 @@ export class MemoryStore {
     this.notesPath = join(this.root, 'current_context.md')
     this.feedbackPath = join(this.root, 'feedback.jsonl')
     this.policiesDir = join(this.root, 'policies')
+    this.sourcesDir = join(this.root, 'sources')
+    this.candidatesDir = join(this.root, 'candidates')
     this.ensureInitialized()
   }
 
   ensureInitialized() {
     mkdirSync(this.root, { recursive: true })
     mkdirSync(this.policiesDir, { recursive: true })
-    if (!existsSync(this.modelPath)) writeJson(this.modelPath, EMPTY_MODEL)
+    mkdirSync(this.sourcesDir, { recursive: true })
+    mkdirSync(this.candidatesDir, { recursive: true })
+    if (!existsSync(this.modelPath)) writeJson(this.modelPath, createEmptyModel())
     if (!existsSync(this.notesPath)) {
       writeFileSync(this.notesPath, '# Current context\n\nAdd project- or user-confirmed context here.\n', 'utf8')
     }
@@ -34,20 +28,19 @@ export class MemoryStore {
 
   readModel() {
     try {
-      return JSON.parse(readFileSync(this.modelPath, 'utf8'))
+      return upgradeModel(JSON.parse(readFileSync(this.modelPath, 'utf8')))
     } catch (error) {
-      return { ...EMPTY_MODEL, load_error: String(error) }
+      return { ...createEmptyModel(), load_error: String(error) }
     }
   }
 
   renderContext(maxChars = 12000) {
-    const model = JSON.stringify(this.readModel(), null, 2)
+    const model = JSON.stringify(toRuntimeModel(this.readModel()), null, 2)
     let notes = ''
     try { notes = readFileSync(this.notesPath, 'utf8') } catch {}
     const text = [
       '## Explicit Personal Model (user-reviewable local files)',
-      `Memory directory: ${this.root}`,
-      'Treat explicit user-confirmed preferences as stronger than inferred preferences. Apply every preference only within its scope and exceptions. Safety invariants override autonomy preferences.',
+      'This file follows WeaveSpec. Use only user_confirmed preferences. Candidate and rejected records never authorize behavior. Apply every preference only within its scope and exclusions. Safety invariants override autonomy preferences.',
       '### personal_model.json',
       model,
       '### current_context.md',
@@ -63,6 +56,9 @@ export class MemoryStore {
       current_context_file: this.notesPath,
       feedback_file: this.feedbackPath,
       policies_dir: this.policiesDir,
+      sources_dir: this.sourcesDir,
+      candidates_dir: this.candidatesDir,
+      pending_candidates: countPendingCandidates(this.candidatesDir),
       personal_model: this.readModel(),
     }
   }
@@ -83,6 +79,45 @@ export class MemoryStore {
     writeJson(path, record)
     appendJsonLine(this.feedbackPath, record)
     return path
+  }
+}
+
+function toRuntimeModel(model) {
+  const now = Date.now()
+  return {
+    schema_version: model.schema_version,
+    subject: { id: model.subject?.id ?? 'local-user' },
+    updated_at: model.updated_at,
+    preferences: (model.preferences ?? [])
+      .filter(preference => preference.status === 'user_confirmed')
+      .filter(preference => !preference.expires_at || Date.parse(preference.expires_at) > now)
+      .map(preference => ({
+        id: preference.id,
+        kind: preference.kind,
+        claim: preference.claim,
+        dimension: preference.dimension,
+        scope: preference.scope,
+        exclusions: preference.exclusions,
+        confidence: preference.confidence,
+        sensitivity: preference.sensitivity,
+        conflicts_with: preference.conflicts_with ?? [],
+      })),
+    safety_invariants: model.safety_invariants,
+    ...(model.load_error ? { load_error: model.load_error } : {}),
+  }
+}
+
+function countPendingCandidates(dir) {
+  try {
+    let count = 0
+    for (const name of readdirSync(dir)) {
+      if (!name.endsWith('.json')) continue
+      const batch = JSON.parse(readFileSync(join(dir, name), 'utf8'))
+      count += (batch.candidates ?? []).filter(candidate => candidate.status === 'candidate').length
+    }
+    return count
+  } catch {
+    return null
   }
 }
 

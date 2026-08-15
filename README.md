@@ -9,6 +9,7 @@ The project tests a narrow question: does an explicit, editable collaboration po
 ## What it does
 
 - Reads `personal_model.json` and `current_context.md` from a project-local `.personal-model` directory.
+- Converts ChatGPT exports, Markdown notes, and JSONL histories into reviewable WeaveSpec candidates.
 - Compiles an `act`, `ask`, `propose`, or `explain_then_act` policy for each new task.
 - Pauses for confirmation when the policy is uncertain or the task carries enough risk.
 - Saves each policy under `.personal-model/policies/<session>/turn-<n>.json`.
@@ -70,12 +71,46 @@ Then give the agent a task that would modify a file. The agent should call `taci
 
 If the agent skips calibration and calls a protected tool, DSH denies the tool call and asks it to calibrate first.
 
+## Import long-term memory
+
+[WeaveSpec v0.1](docs/WEAVESPEC.md) defines a platform-neutral Personal Model with evidence, scope, exclusions, confidence, review status, and provenance. The deterministic importer looks only for explicit preference language in user-authored messages. It does not ask a model for a personality summary.
+
+Import a ChatGPT `conversations.json`, Markdown file, or JSONL transcript:
+
+```powershell
+node .\bin\weave-ingest.mjs --input <path> --format auto
+```
+
+This creates a local source envelope and candidate batch without changing the formal Personal Model. Review candidates one at a time:
+
+```powershell
+node .\bin\weave-review.mjs list
+node .\bin\weave-review.mjs show --id <candidate-id>
+node .\bin\weave-review.mjs accept --id <candidate-id>
+node .\bin\weave-review.mjs reject --id <candidate-id>
+```
+
+Use acceptance options to narrow an extracted claim before promotion:
+
+```powershell
+node .\bin\weave-review.mjs accept --id <candidate-id> --domain software_engineering --risk low --reversibility reversible --exclude production_changes
+```
+
+Legacy TacitWeave models remain readable. Convert the local file explicitly with:
+
+```powershell
+node .\bin\weave-review.mjs migrate
+node .\bin\weave-review.mjs validate
+```
+
 ## Privacy model
 
 Personal data is stored under:
 
 ```text
 .personal-model/
+  sources/
+  candidates/
   personal_model.json
   current_context.md
   policies/
@@ -86,7 +121,7 @@ This directory is ignored by Git and omitted from the npm package. The tracked f
 
 Local storage does not mean the memory stays on the machine during a model run. TacitWeave inserts the loaded memory into the DSH model context. If DSH uses a remote model provider, that provider receives the inserted text. The `tacitweave_inspect` output may also become part of the chat transcript. Keep the memory files small, avoid secrets, and check the retention policy of the configured provider. Use a local model endpoint if the prompt itself must remain local.
 
-Policy records and feedback can contain task details or user corrections. Treat the whole `.personal-model` directory as private data. TacitWeave never promotes a single correction directly into `personal_model.json`; corrections remain in the feedback log until a person reviews them.
+Source envelopes, candidates, policy records, and feedback can contain user text or task details. Treat the whole `.personal-model` directory as private data. Importing history never changes `personal_model.json`; only an explicit review command promotes one candidate. Calibration corrections remain in the feedback log until a person reviews them.
 
 ## Export project context
 
@@ -94,7 +129,7 @@ Policy records and feedback can contain task details or user corrections. Treat 
 node .\bin\export-context.mjs --root . --output .\.personal-model\exports\current-context.md
 ```
 
-The exporter skips Git data, dependency directories, virtual environments, `work`, common key files, and strings that resemble tokens. It also limits individual file size and total output size. This is a screening step, not a privacy guarantee. Read the exported Markdown before sending it to any model.
+The exporter skips the complete `.personal-model` directory, Git data, dependency directories, virtual environments, `work`, common key files, and strings that resemble tokens. It omits the absolute project path and limits individual file size and total output size. This is a screening step, not a privacy guarantee. Read the exported Markdown before sending it to any model.
 
 ## Configuration
 
@@ -131,5 +166,6 @@ npm run pack:dry
 
 - The agent must call the calibration tool. The DSH policy gate blocks configured side-effect tools, but it cannot prevent overconfident advice in plain text.
 - The model assigns risk levels; this version has no independent risk classifier.
-- Personal-model files have no automatic conflict resolution or schema migration.
+- The deterministic importer favors precision over recall and will miss preferences that are only implied.
+- Conflicting preferences are flagged for review and never resolved automatically.
 - The project has not completed a user study and makes no claim that it improves collaboration quality.

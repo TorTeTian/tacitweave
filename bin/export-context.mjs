@@ -8,7 +8,7 @@ const output = resolve(args.output ?? join(root, '.personal-model', 'exports', '
 const maxFileBytes = numberArg(args['max-file-bytes'], 30000)
 const maxTotalBytes = numberArg(args['max-total-bytes'], 500000)
 const allowedExtensions = new Set(['.md', '.txt', '.json', '.yaml', '.yml', '.toml', '.py', '.js', '.mjs', '.cjs', '.ts', '.tsx', '.jsx', '.html', '.css', '.sql'])
-const ignoredDirs = new Set(['.git', 'node_modules', '.npm-cache', 'dist', 'build', 'coverage', '__pycache__', '.venv', 'venv', 'work', 'exports', 'policies'])
+const ignoredDirs = new Set(['.git', '.personal-model', 'node_modules', '.npm-cache', 'dist', 'build', 'coverage', '__pycache__', '.venv', 'venv', 'work', 'exports', 'policies'])
 const secretNames = new Set(['.env', '.npmrc', '.pypirc', 'credentials.json', 'secrets.json'])
 
 const files = collectFiles(root)
@@ -38,7 +38,7 @@ const body = [
   '',
   '> Review this file before sending it to any model. The exporter excludes common secret files and suspicious token patterns, but no automatic filter is perfect.',
   '',
-  `- Root: ${root}`,
+  '- Root: project root (absolute path omitted)',
   `- Generated: ${generated}`,
   `- Included files: ${included.length}`,
   `- Included bytes: ${used}`,

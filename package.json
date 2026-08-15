@@ -10,7 +10,9 @@
     "./package.json": "./package.json"
   },
   "bin": {
-    "personal-model-context": "./bin/export-context.mjs"
+    "personal-model-context": "./bin/export-context.mjs",
+    "weave-ingest": "./bin/weave-ingest.mjs",
+    "weave-review": "./bin/weave-review.mjs"
   },
   "files": [
     "index.js",
@@ -19,12 +21,13 @@
     "cordis.patch.yml",
     "README.md",
     "docs/",
+    "schemas/",
     "skills/",
     "scenarios/",
     "examples/"
   ],
   "scripts": {
-    "check": "node --check index.js && node --check src/core.js && node --check src/store.js && node --check bin/export-context.mjs",
+    "check": "node --check index.js && node --check src/core.js && node --check src/store.js && node --check src/weavespec.js && node --check bin/export-context.mjs && node --check bin/weave-ingest.mjs && node --check bin/weave-review.mjs",
     "test": "node --test \"test/*.test.js\"",
     "pack:dry": "npm pack --dry-run --cache ./.npm-cache"
   },

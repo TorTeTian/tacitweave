@@ -1,21 +1,52 @@
 {
-  "schema_version": 1,
-  "user_label": "example-user",
-  "updated_at": null,
+  "schema_version": "weavespec/0.1",
+  "subject": {
+    "id": "example-user",
+    "label": null
+  },
+  "updated_at": "2026-01-01T00:00:00.000Z",
   "preferences": [
     {
-      "id": "example-low-risk-autonomy",
-      "claim": "用户授权 AI 自主处理低风险、可逆的工程细节。",
+      "id": "pref-example-low-risk-autonomy",
+      "kind": "interaction_preference",
+      "claim": "Allow the agent to choose routine engineering details when work is reversible and protected by version control.",
       "dimension": "autonomy",
-      "scope": ["software_engineering", "low_risk", "reversible"],
-      "exceptions": ["destructive", "irreversible", "external_effects"],
-      "confidence": 1.0,
-      "status": "explicit",
-      "evidence": ["example evidence: user explicitly stated this preference"]
+      "scope": {
+        "domains": ["software_engineering"],
+        "actions": ["content_or_file_editing"],
+        "risk": ["low"],
+        "reversibility": ["reversible"],
+        "projects": []
+      },
+      "exclusions": [
+        "destructive_operations",
+        "irreversible_actions",
+        "financial_transactions",
+        "privacy_sensitive_disclosure",
+        "external_communication",
+        "public_publishing",
+        "production_changes"
+      ],
+      "evidence": [
+        {
+          "source_id": "source-example",
+          "message_id": "message-example",
+          "timestamp": "2026-01-01T00:00:00.000Z",
+          "excerpt": "For routine, version-controlled code changes, choose sensible implementation details without asking me.",
+          "excerpt_sha256": "44c8c43aed5673d8f9e2cc602a7f25e6e1b15940748c2d7aab6b375917feb041"
+        }
+      ],
+      "confidence": 1,
+      "status": "user_confirmed",
+      "sensitivity": "normal",
+      "conflicts_with": [],
+      "confirmed_at": "2026-01-01T00:00:00.000Z",
+      "last_reviewed_at": "2026-01-01T00:00:00.000Z",
+      "expires_at": null
     }
   ],
   "safety_invariants": [
-    "破坏性、不可逆、金钱、隐私、公开发布和对外沟通行为必须显式确认。",
-    "宽泛的自主偏好不能覆盖更具体的风险边界。"
+    "Destructive, irreversible, financial, privacy-sensitive, publishing, production, and external communication actions require explicit confirmation.",
+    "A general preference for autonomy never overrides a narrower risk boundary."
   ]
 }

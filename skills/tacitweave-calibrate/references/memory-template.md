@@ -1,27 +1,33 @@
 # Personal Model template
 
-Keep the Personal Model short, scoped, and reviewable. Store filled-in files outside the Skill package.
+Use WeaveSpec for a portable Personal Model. Keep filled-in files outside the Skill package.
 
-```markdown
-# Personal Model
-
-## Collaboration preferences
-
-- Claim: <preference stated in observable terms>
-  Scope: <tasks or domains where it applies>
-  Exclusions: <situations where it must not transfer>
-  Evidence: <direct statement or repeated correction>
-  Confidence: <low, medium, or high>
-  Last reviewed: <date>
-
-## Decision ownership
-
-- ChatGPT may decide: <reversible, low-risk choices>
-- Ask me before: <irreversible, external, sensitive, or consequential choices>
-
-## Corrections awaiting review
-
-- <candidate update that has not yet been promoted to long-term memory>
+```json
+{
+  "schema_version": "weavespec/0.1",
+  "subject": {
+    "id": "local-user",
+    "label": null
+  },
+  "updated_at": null,
+  "preferences": [],
+  "safety_invariants": [
+    "Destructive, irreversible, financial, privacy-sensitive, publishing, production, and external communication actions require explicit confirmation.",
+    "A general preference for autonomy never overrides a narrower risk boundary."
+  ]
+}
 ```
 
-Do not store passwords, API keys, authentication tokens, private keys, recovery codes, or raw confidential documents in this file. Separate stable preferences from temporary project context. Add an exclusion when a preference could be dangerous outside its original scope.
+Each confirmed preference needs a concrete claim, kind, dimension, scope, exclusions, evidence provenance, confidence, sensitivity, and review timestamps. Use only records with `status: user_confirmed`.
+
+Keep raw imports and unreviewed candidates outside the formal model:
+
+```text
+.personal-model/
+  sources/
+  candidates/
+  personal_model.json
+  current_context.md
+```
+
+Do not store passwords, API keys, authentication tokens, private keys, recovery codes, or raw confidential documents in the model. Separate stable preferences from temporary project context. Add an exclusion when a preference could become dangerous outside its original scope. Never copy a filled-in Personal Model into a public Skill package.
